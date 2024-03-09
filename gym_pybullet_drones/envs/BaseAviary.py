@@ -2,6 +2,7 @@ import os
 from sys import platform
 import time
 import collections
+import random
 from datetime import datetime
 import xml.etree.ElementTree as etxml
 import pkg_resources
@@ -299,10 +300,10 @@ class BaseAviary(gym.Env):
                                                      flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
                                                      physicsClientId=self.CLIENT
                                                      )
-            (Image.fromarray(np.reshape(rgb, (h, w, 4)), 'RGBA')).save(os.path.join(self.IMG_PATH, "frame_"+str(self.FRAME_NUM)+".png"))
+            #(Image.fromarray(np.reshape(rgb, (h, w, 4)), 'RGBA')).save(os.path.join(self.IMG_PATH, "frame_"+str(self.FRAME_NUM)+".png"))
             #### Save the depth or segmentation view instead #######
-            # dep = ((dep-np.min(dep)) * 255 / (np.max(dep)-np.min(dep))).astype('uint8')
-            # (Image.fromarray(np.reshape(dep, (h, w)))).save(self.IMG_PATH+"frame_"+str(self.FRAME_NUM)+".png")
+            dep = ((dep-np.min(dep)) * 255 / (np.max(dep)-np.min(dep))).astype('uint8')
+            (Image.fromarray(np.reshape(dep, (h, w)))).save(self.IMG_PATH+"frame_"+str(self.FRAME_NUM)+".png")
             # seg = ((seg-np.min(seg)) * 255 / (np.max(seg)-np.min(seg))).astype('uint8')
             # (Image.fromarray(np.reshape(seg, (h, w)))).save(self.IMG_PATH+"frame_"+str(self.FRAME_NUM)+".png")
             self.FRAME_NUM += 1
@@ -960,25 +961,61 @@ class BaseAviary(gym.Env):
         These obstacles are loaded from standard URDF files included in Bullet.
 
         """
-        p.loadURDF("samurai.urdf",
-                   physicsClientId=self.CLIENT
-                   )
-        p.loadURDF("duck_vhacd.urdf",
-                   [-.5, -.5, .05],
-                   p.getQuaternionFromEuler([0, 0, 0]),
-                   physicsClientId=self.CLIENT
-                   )
-        p.loadURDF("cube_no_rotation.urdf",
-                   [-.5, -2.5, .5],
-                   p.getQuaternionFromEuler([0, 0, 0]),
-                   physicsClientId=self.CLIENT
-                   )
-        p.loadURDF("sphere2.urdf",
-                   [0, 2, .5],
-                   p.getQuaternionFromEuler([0,0,0]),
-                   physicsClientId=self.CLIENT
-                   )
-    
+        # p.loadURDF("samurai.urdf",
+        #            physicsClientId=self.CLIENT
+        #            )
+        # p.loadURDF("duck_vhacd.urdf",
+        #            [-.5, -.5, .05],
+        #            p.getQuaternionFromEuler([0, 0, 0]),
+        #            physicsClientId=self.CLIENT
+        #            )
+        # p.loadURDF("cube_no_rotation.urdf",
+        #            [-.5, -2.5, .5],
+        #            p.getQuaternionFromEuler([0, 0, 0]),
+        #            physicsClientId=self.CLIENT
+        #            )
+        # p.loadURDF("sphere2.urdf",
+        #            [0, 2, .5],
+        #            p.getQuaternionFromEuler([0,0,0]),
+        #            physicsClientId=self.CLIENT
+        #            )
+        # p.loadURDF("../assets/cylinder.urdf",
+        #            [0, -2, 2.5],
+        #            p.getQuaternionFromEuler([0,0,0]),
+        #            physicsClientId=self.CLIENT
+        # )
+        self.distribute_cylinders(40, -2, -3, 10, 3)
+                    
+
+    def distribute_cylinders(self, N, x1, y1, x2, y2):
+        # Initialize PyBullet
+        
+        cylinders = []
+        CYLINDER_RADIUS = 0.25
+        for _ in range(N):
+            # Generate random coordinates within the specified area
+            x = random.uniform(x1 + CYLINDER_RADIUS, x2 - CYLINDER_RADIUS)
+            y = random.uniform(y1 + CYLINDER_RADIUS, y2 - CYLINDER_RADIUS)
+
+            # Check if the coordinates are not too close to any existing cylinder
+            too_close = False
+            for cylinder in cylinders:
+                cylinder_pos, _ = p.getBasePositionAndOrientation(cylinder)
+                dist_sq = (cylinder_pos[0] - x) ** 2 + (cylinder_pos[1] - y) ** 2
+                dist_from_origin = x ** 2 + y ** 2
+                if (dist_sq < (2 * CYLINDER_RADIUS) ** 2) or (dist_from_origin < (2 * CYLINDER_RADIUS) ** 2):  # If distance is less than twice the radius, they intersect
+                    too_close = True
+                    break
+
+            if not too_close:
+                # Create cylinder at the generated coordinates
+                z = 2.5  # Assuming z-coordinate is always 0
+                cylinder_id = p.loadURDF("../assets/cylinder.urdf",
+                                        [x, y, z],
+                                        p.getQuaternionFromEuler([0, 0, 0]),
+                                        physicsClientId=self.CLIENT)
+                cylinders.append(cylinder_id)
+
     ################################################################################
     
     def _parseURDFParameters(self):
