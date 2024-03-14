@@ -116,7 +116,6 @@ def run(
 
     #### Obtain the PyBullet Client ID from the environment ####
     PYB_CLIENT = env.getPyBulletClient()
-
     #### Initialize the logger #################################
     logger = Logger(logging_freq_hz=control_freq_hz,
                     num_drones=num_drones,
@@ -131,6 +130,7 @@ def run(
     #### Run the simulation ####################################
     action = np.zeros((num_drones,4))
     START = time.time()
+    env.get_reference_trajectory(0)
     for i in range(0, int(duration_sec*env.CTRL_FREQ)):
 
         #### Make it rain rubber ducks #############################

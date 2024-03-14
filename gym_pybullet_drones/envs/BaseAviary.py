@@ -15,6 +15,9 @@ import pybullet_data
 import gymnasium as gym
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 
+from ompl import base as ob
+from ompl import geometric as og
+import itertools
 
 class BaseAviary(gym.Env):
     """Base class for "drone aviary" Gym environments."""
@@ -91,6 +94,7 @@ class BaseAviary(gym.Env):
         self.RECORD = record
         self.PHYSICS = physics
         self.OBSTACLES = obstacles
+        self.obstacle_list = []
         self.USER_DEBUG = user_debug_gui
         self.URDF = self.DRONE_MODEL.value + ".urdf"
         self.OUTPUT_FOLDER = output_folder
@@ -300,12 +304,12 @@ class BaseAviary(gym.Env):
                                                      flags=p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
                                                      physicsClientId=self.CLIENT
                                                      )
-            #(Image.fromarray(np.reshape(rgb, (h, w, 4)), 'RGBA')).save(os.path.join(self.IMG_PATH, "frame_"+str(self.FRAME_NUM)+".png"))
+            (Image.fromarray(np.reshape(rgb, (h, w, 4)), 'RGBA')).save(os.path.join(self.IMG_PATH, "frame_"+str(self.FRAME_NUM)+".png"))
             #### Save the depth or segmentation view instead #######
             dep = ((dep-np.min(dep)) * 255 / (np.max(dep)-np.min(dep))).astype('uint8')
-            (Image.fromarray(np.reshape(dep, (h, w)))).save(self.IMG_PATH+"frame_"+str(self.FRAME_NUM)+".png")
-            # seg = ((seg-np.min(seg)) * 255 / (np.max(seg)-np.min(seg))).astype('uint8')
-            # (Image.fromarray(np.reshape(seg, (h, w)))).save(self.IMG_PATH+"frame_"+str(self.FRAME_NUM)+".png")
+            (Image.fromarray(np.reshape(dep, (h, w)))).save(self.IMG_PATH+"depth_frame_"+str(self.FRAME_NUM)+".png")
+            seg = ((seg-np.min(seg)) * 255 / (np.max(seg)-np.min(seg))).astype('uint8')
+            (Image.fromarray(np.reshape(seg, (h, w)))).save(self.IMG_PATH+"seg_frame_"+str(self.FRAME_NUM)+".png")
             self.FRAME_NUM += 1
             if self.VISION_ATTR:
                 for i in range(self.NUM_DRONES):
@@ -974,17 +978,19 @@ class BaseAviary(gym.Env):
         #            p.getQuaternionFromEuler([0, 0, 0]),
         #            physicsClientId=self.CLIENT
         #            )
-        # p.loadURDF("sphere2.urdf",
-        #            [0, 2, .5],
-        #            p.getQuaternionFromEuler([0,0,0]),
-        #            physicsClientId=self.CLIENT
-        #            )
+        sphere = p.loadURDF("sphere2.urdf",
+                   [2.5, 0, .5],
+                   p.getQuaternionFromEuler([0,0,0]),
+                   physicsClientId=self.CLIENT
+                   )
+        self.obstacle_list.append(sphere)
+        print(f"obstacle_list: {self.obstacle_list[0]}")
         # p.loadURDF("../assets/cylinder.urdf",
         #            [0, -2, 2.5],
         #            p.getQuaternionFromEuler([0,0,0]),
         #            physicsClientId=self.CLIENT
         # )
-        self.distribute_cylinders(40, -2, -3, 10, 3)
+        self.distribute_cylinders(5, -2, -3, 4, 3)
                     
 
     def distribute_cylinders(self, N, x1, y1, x2, y2):
@@ -1014,8 +1020,70 @@ class BaseAviary(gym.Env):
                                         [x, y, z],
                                         p.getQuaternionFromEuler([0, 0, 0]),
                                         physicsClientId=self.CLIENT)
+                self.obstacle_list.append(cylinder_id)
                 cylinders.append(cylinder_id)
 
+    # Use python OMPL bindings to compute a reference trajectory
+    def get_reference_trajectory(self, drone_id):
+        space = ob.SE3StateSpace()
+        # set lower and upper bounds
+        bounds = ob.RealVectorBounds(3)
+        bounds.setLow(0, -3)
+        bounds.setHigh(0, 10)
+        bounds.setLow(1, -3)
+        bounds.setHigh(1, 3)
+        bounds.setLow(2, 0)
+        bounds.setHigh(2, 1)
+        space.setBounds(bounds)
+
+        
+            
+        # create a simple setup object
+        ss = og.SimpleSetup(space)
+        ss.setStateValidityChecker(ob.StateValidityCheckerFn(self.isStateValid))
+
+        start = ob.State(space)
+        start().setXYZ(0.0,0.0,0.15)
+        start().rotation().setIdentity()
+        goal = ob.State(space)
+        goal().setXYZ(5,0,0.15)
+        goal().rotation().setIdentity()
+
+        ss.setStartAndGoalStates(start, goal)
+
+        # this will automatically choose a default planner with
+        # default parameters
+        solved = ss.solve(5.0)
+
+        if solved:
+            # try to shorten the path
+            ss.simplifySolution()
+            # print the simplified path
+            print(ss.getSolutionPath())
+            solved_path = ss.getSolutionPath()
+            solved_path.interpolate()
+            print(f"solved path length: {solved_path.length()}")
+            print(f"solved path states: {solved_path.getStateCount()}")
+            print(f"solved path states: {solved_path.getStates()}")
+            print(f"dir(solved_path) {dir(solved_path)}")
+            for s0, s1 in self.pairwise(solved_path.getStates()):
+                print(f"interstate: {s0.getZ()}, {s1.getZ()}")
+                p.addUserDebugLine(lineFromXYZ=[s0.getX(), s0.getY(), s0.getZ()], lineToXYZ=[s1.getX(), s1.getY(), s1.getZ()], lineColorRGB=[1, 0, 1], lineWidth=5.0)
+            
+    def isStateValid(self, state)->bool:
+        for obstacle in self.obstacle_list:
+            obstacle_bounds = p.getAABB(obstacle)
+            if (state.getX() > obstacle_bounds[0][0] and state.getX() < obstacle_bounds[1][0] and
+                state.getY() > obstacle_bounds[0][1] and state.getY() < obstacle_bounds[1][1] and
+                state.getZ() > obstacle_bounds[0][2] and state.getZ() < obstacle_bounds[1][2]):
+                return False
+        return True
+
+    def pairwise(self, iterable):
+        "s -> (s0, s1), (s1, s2), (s2, s3), ..."
+        a, b = itertools.tee(iterable)
+        next(b, None)
+        return zip(a, b)
     ################################################################################
     
     def _parseURDFParameters(self):
