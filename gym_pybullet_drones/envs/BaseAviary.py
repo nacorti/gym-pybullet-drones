@@ -1055,27 +1055,44 @@ class BaseAviary(gym.Env):
         # default parameters
         solved = ss.solve(5.0)
 
+        # After the path is solved
         if solved:
-            # try to shorten the path
-            ss.simplifySolution()
-            # print the simplified path
+            # Create a path simplifier
+            ps = og.PathSimplifier(ss.getSpaceInformation())
+
+            # Get the solution path
+            path = ss.getSolutionPath() 
+            # Use the simplifyMax method to simplify the path
+            # You can adjust the maxSteps and maxTime parameters to control the simplification process
+            ps.simplifyMax(path)
+            path.interpolate(500)
+            # Print the simplified path
             print(ss.getSolutionPath())
+        # if solved:
+        #     # try to shorten the path
+        #     ss.simplifySolution()
+        #     # print the simplified path
+        #     print(ss.getSolutionPath())
             solved_path = ss.getSolutionPath()
             solved_path.interpolate()
             print(f"solved path length: {solved_path.length()}")
             print(f"solved path states: {solved_path.getStateCount()}")
             print(f"solved path states: {solved_path.getStates()}")
             print(f"dir(solved_path) {dir(solved_path)}")
-            for s0, s1 in self.pairwise(solved_path.getStates()):
-                print(f"interstate: {s0.getZ()}, {s1.getZ()}")
-                p.addUserDebugLine(lineFromXYZ=[s0.getX(), s0.getY(), s0.getZ()], lineToXYZ=[s1.getX(), s1.getY(), s1.getZ()], lineColorRGB=[1, 0, 1], lineWidth=5.0)
+            print(f"dir(a_state) {dir(solved_path.getStates()[0])}")
+            print("done with debugs")
+            for i, (s0, s1) in enumerate(self.pairwise(solved_path.getStates())):
+                #print(f"interstate: {s0.getZ()}, {s1.getZ()}")
+                if i % 5 == 0:
+                    p.addUserDebugLine(lineFromXYZ=[s0.getX(), s0.getY(), s0.getZ()], lineToXYZ=[s1.getX(), s1.getY(), s1.getZ()], lineColorRGB=[1, 0, 1], lineWidth=5.0)
             
     def isStateValid(self, state)->bool:
         for obstacle in self.obstacle_list:
+            safety_radius = 0.10
             obstacle_bounds = p.getAABB(obstacle)
-            if (state.getX() > obstacle_bounds[0][0] and state.getX() < obstacle_bounds[1][0] and
-                state.getY() > obstacle_bounds[0][1] and state.getY() < obstacle_bounds[1][1] and
-                state.getZ() > obstacle_bounds[0][2] and state.getZ() < obstacle_bounds[1][2]):
+            if (state.getX()-safety_radius > obstacle_bounds[0][0] and state.getX()+safety_radius < obstacle_bounds[1][0] and
+                state.getY()-safety_radius > obstacle_bounds[0][1] and state.getY()+safety_radius < obstacle_bounds[1][1] and
+                state.getZ()-safety_radius > obstacle_bounds[0][2] and state.getZ()+safety_radius < obstacle_bounds[1][2]):
                 return False
         return True
 
