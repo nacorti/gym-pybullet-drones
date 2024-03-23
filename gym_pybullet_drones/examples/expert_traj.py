@@ -194,12 +194,24 @@ def get_reference_trajectory(obstacle_list: list[int]):
         print(f"dir(solved_path) {dir(solved_path)}")
         print(f"dir(a_state) {dir(solved_path.getStates()[0])}")
         print("done with debugs")
-        for i, (s0, s1) in enumerate(pairwise(solved_path.getStates())):
-            #print(f"interstate: {s0.getZ()}, {s1.getZ()}")
-            #if i % 5 == 0:
-            p.addUserDebugLine(lineFromXYZ=[s0.getX(), s0.getY(), s0.getZ()], lineToXYZ=[s1.getX(), s1.getY(), s1.getZ()], lineColorRGB=[1, 0, 1], lineWidth=5.0)
+        add_gradient_lines(solved_path)
         return solved_path
 
+def add_gradient_lines(solved_path):
+    for i, (s0, s1) in enumerate(pairwise(solved_path.getStates())):
+        if i % 50 == 0:
+            # calculate gradient from s1 to s0
+            gradX = s1.getX() - s0.getX()
+            gradY = s1.getY() - s0.getY()
+            gradZ = s1.getZ() - s0.getZ()
+            # normalize the gradient
+            gradMag = np.sqrt(gradX**2 + gradY**2 + gradZ**2) *10
+            gradX = gradX / gradMag
+            gradY = gradY / gradMag
+            gradZ = gradZ / gradMag
+            # add a line in the direction of the gradient
+            p.addUserDebugLine(lineFromXYZ=[s0.getX(), s0.getY(), s0.getZ()], lineToXYZ=[s0.getX() + gradX, s0.getY() + gradY, s0.getZ() + gradZ], lineColorRGB=[1, 0, 1], lineWidth=5.0)
+            
 def pairwise(iterable):
     "s -> (s0, s1), (s1, s2), (s2, s3), ..."
     a, b = itertools.tee(iterable)
