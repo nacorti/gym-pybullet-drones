@@ -65,8 +65,8 @@ def run(
     H = .1
     H_STEP = .05
     R = .3
-    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2)-R, H+i*H_STEP] for i in range(num_drones)])
-    INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
+    #INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2)-R, H+i*H_STEP] for i in range(num_drones)])
+    #INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
 
     #### Initialize a circular trajectory ######################
     PERIOD = 10
@@ -102,8 +102,8 @@ def run(
     #### Create the environment ################################
     env = CtrlAviary(drone_model=drone,
                         num_drones=num_drones,
-                        initial_xyzs=INIT_XYZS,
-                        initial_rpys=INIT_RPYS,
+                        #initial_xyzs=INIT_XYZS,
+                        #initial_rpys=INIT_RPYS,
                         physics=physics,
                         neighbourhood_radius=10,
                         pyb_freq=simulation_freq_hz,
@@ -143,9 +143,9 @@ def run(
         for j in range(num_drones):
             action[j, :], _, _ = ctrl[j].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                     state=obs[j],
-                                                                    target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
+                                                                    #target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
                                                                     # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
-                                                                    target_rpy=INIT_RPYS[j, :]
+                                                                    #target_rpy=INIT_RPYS[j, :]
                                                                     )
             #env._getDroneImages(j, segmentation=True)
 
@@ -161,7 +161,7 @@ def run(
             logger.log(drone=j,
                        timestamp=i/env.CTRL_FREQ,
                        state=obs[j],
-                       control=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2], INIT_RPYS[j, :], np.zeros(6)])
+                       #control=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2], INIT_RPYS[j, :], np.zeros(6)])
                        # control=np.hstack([INIT_XYZS[j, :]+TARGET_POS[wp_counters[j], :], INIT_RPYS[j, :], np.zeros(6)])
                        )
 
