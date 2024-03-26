@@ -78,23 +78,26 @@ def run(
                     )
 
     #### Initialize the controllers ############################
-    #ctrl = [DSLPIDControl(drone_model=drone) for i in range(2)]
+    ctrl = [DSLPIDControl(drone_model=drone) for i in range(1)]
 
     #### Run the simulation ####################################
     action = np.zeros((2,4))
     START = time.time()
-    expert_trajectory = get_reference_trajectory(env.get_obstacle_list())
+    solved_path = get_reference_trajectory(env.get_obstacle_list())
+    print(f"got solved_path: {solved_path.shape}")
+    add_gradient_lines(solved_path)
+    TARGET_POS = solved_path[:, :3]
     for i in range(0, int(duration_sec*env.CTRL_FREQ)):
 
         #### Step the simulation ###################################
         obs, reward, terminated, truncated, info = env.step(action)
 
         #### Compute control for the current way point #############
-        # for j in range(2):
-        #     action[j, :], _, _ = ctrl[j].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
-        #                                                             state=obs[j],
-        #                                                             target_pos=np.hstack([TARGET_POS[wp_counters[j], :], INIT_XYZS[j, 2]]),
-        #                                                             )
+        if i < solved_path.shape[0]:
+            action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
+                                                                state=obs[0],
+                                                                target_pos=TARGET_POS[i],
+                                                                )
 
         #### Go to the next way point and loop #####################
         # for j in range(2):
@@ -137,10 +140,7 @@ def get_reference_trajectory(obstacle_list: list[int]):
     bounds.setHigh(1, 3)
     bounds.setLow(2, 0)
     bounds.setHigh(2, 1)
-    space.setBounds(bounds)
-
-    
-        
+    space.setBounds(bounds)  
     # create a simple setup object
     ss = og.SimpleSetup(space)
     ### state validity checker needs to access both state and pybullet obstacle list
@@ -174,43 +174,45 @@ def get_reference_trajectory(obstacle_list: list[int]):
         ps = og.PathSimplifier(ss.getSpaceInformation())
 
         # Get the solution path
-        path = ss.getSolutionPath() 
+        solved_path = ss.getSolutionPath() 
         # Use the simplifyMax method to simplify the path
         # You can adjust the maxSteps and maxTime parameters to control the simplification process
-        ps.simplifyMax(path)
-        path.interpolate(500)
+        ps.simplifyMax(solved_path)
+        solved_path.interpolate(500)
         # Print the simplified path
-        print(ss.getSolutionPath())
-    # if solved:
-    #     # try to shorten the path
-    #     ss.simplifySolution()
-    #     # print the simplified path
-    #     print(ss.getSolutionPath())
-        solved_path = ss.getSolutionPath()
-        solved_path.interpolate()
-        print(f"solved path length: {solved_path.length()}")
-        print(f"solved path states: {solved_path.getStateCount()}")
-        print(f"solved path states: {solved_path.getStates()}")
-        print(f"dir(solved_path) {dir(solved_path)}")
-        print(f"dir(a_state) {dir(solved_path.getStates()[0])}")
-        print("done with debugs")
-        add_gradient_lines(solved_path)
-        return solved_path
+        # print(ss.getSolutionPath())
+        # print(f"solved path length: {solved_path.length()}")
+        # print(f"solved path states: {solved_path.getStateCount()}")
+        # print(f"solved path states: {solved_path.getStates()}")
+        # print(f"dir(solved_path): {dir(solved_path)}")
+        # print(f"dir(rotation): {dir(solved_path.getStates()[0].rotation())}")
+        
+        target_positions = np.array([translate_state_to_numpy(state) for state in solved_path.getStates()])
+        return target_positions
 
-def add_gradient_lines(solved_path):
-    for i, (s0, s1) in enumerate(pairwise(solved_path.getStates())):
+def translate_state_to_numpy(state)->np.ndarray:
+    return np.array([state.getX(), state.getY(), state.getZ(), state.rotation().x, state.rotation().y, state.rotation().z, state.rotation().w])
+       
+def add_gradient_lines(solved_path: np.ndarray):
+    for i, (s0, s1) in enumerate(pairwise(solved_path)):
         if i % 50 == 0:
+            x0 = s0[0]
+            y0 = s0[1]
+            z0 = s0[2]
+            x1 = s1[0]
+            y1 = s1[1]
+            z1 = s1[2]
             # calculate gradient from s1 to s0
-            gradX = s1.getX() - s0.getX()
-            gradY = s1.getY() - s0.getY()
-            gradZ = s1.getZ() - s0.getZ()
+            gradX = x1 - x0
+            gradY = y1 - y0
+            gradZ = z1 - z0
             # normalize the gradient
             gradMag = np.sqrt(gradX**2 + gradY**2 + gradZ**2) *10
             gradX = gradX / gradMag
             gradY = gradY / gradMag
             gradZ = gradZ / gradMag
             # add a line in the direction of the gradient
-            p.addUserDebugLine(lineFromXYZ=[s0.getX(), s0.getY(), s0.getZ()], lineToXYZ=[s0.getX() + gradX, s0.getY() + gradY, s0.getZ() + gradZ], lineColorRGB=[1, 0, 1], lineWidth=5.0)
+            p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1 + gradX, y1 + gradY, z1 + gradZ], lineColorRGB=[1, 0, 1], lineWidth=5.0)
             
 def pairwise(iterable):
     "s -> (s0, s1), (s1, s2), (s2, s3), ..."
