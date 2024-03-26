@@ -32,7 +32,7 @@ DEFAULT_GUI = True
 DEFAULT_RECORD_VIDEO = False
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 12
+DEFAULT_DURATION_SEC = 20
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 INIT_XYZS = np.array([[0, 0, 0.5]])
@@ -97,6 +97,12 @@ def run(
             action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                 state=obs[0],
                                                                 target_pos=TARGET_POS[i],
+                                                                )
+        else:
+            # set target_pos to last waypoint
+            action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
+                                                                state=obs[0],
+                                                                target_pos=TARGET_POS[-1],
                                                                 )
 
         #### Go to the next way point and loop #####################
