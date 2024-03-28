@@ -377,3 +377,29 @@ class Logger(object):
             plt.savefig(os.path.join('results', 'output_figure.png'))
         else:
             plt.show()
+
+    ################################################################################
+    
+    def get_velocities(self)->np.ndarray:
+        """Returns the velocities of the drones.
+
+        Returns
+        -------
+        ndarray
+            (NUM_DRONES, 3) array of floats containing the velocities.
+
+        """
+        return self.states[:, 3:6, :]
+    
+    ###############################################################################
+    
+    def get_avg_accels(self)->np.ndarray:
+        accels = np.zeros((self.NUM_DRONES, 3, self.states.shape[2] - 1))
+        epsilon = 1e-8  # small constant to avoid division by zero
+        for i in range(self.NUM_DRONES):
+            delta_v = self.states[i, 3:6, 1:] - self.states[i, 3:6, 0:-1]
+            delta_t = self.timestamps[i, 1:] - self.timestamps[i, :-1] + epsilon
+            accels[i, :, :] = delta_v / delta_t
+        # Pad accels with a row of zeros at the beginning for each drone
+        accels = np.pad(accels, ((0, 0), (0, 0), (1, 0)), mode='constant')
+        return accels

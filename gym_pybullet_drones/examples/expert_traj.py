@@ -130,6 +130,35 @@ def run(
 
     #### Close the environment #################################
     env.close()
+    
+    ### Augemnt solved_path with velocity and avg acceleration for each point
+    vels = logger.get_velocities()
+    accs = logger.get_avg_accels()
+    
+    print(f"vels: {vels.shape}")
+    print(f"accs: {accs.shape}") 
+    # shapes are
+    # vels: (2, 3, 960)
+    # accs: (2, 3, 960)
+    
+    pos_for_first_drone = solved_path[:, :3]
+    quat_for_first_drone = solved_path[:, 3:]
+    
+    print(f"pos_for_first_drone: {pos_for_first_drone.shape}")
+    print(f"quat_for_first_drone: {quat_for_first_drone.shape}")
+    
+    vels_for_first_drone = vels[0, :, :500].T
+    accs_for_first_drone = accs[0, :, :500].T
+    
+    print(f"vels_for_first_drone: {vels_for_first_drone.shape}")
+    print(f"accs_for_first_drone: {accs_for_first_drone.shape}")
+    
+    full_reference_traj = np.hstack([pos_for_first_drone, vels_for_first_drone, accs_for_first_drone, quat_for_first_drone])
+    
+    print(f"full_reference_traj: {full_reference_traj.shape}")
+    
+    print(f"full_reference_traj: {full_reference_traj[1]}")
+    
 
     #### Save the simulation results ###########################
     logger.save()
