@@ -25,6 +25,7 @@ from gym_pybullet_drones.utils.Logger import Logger
 from ompl import base as ob
 from ompl import geometric as og
 import itertools
+from scipy.spatial.transform import Rotation
 
 
 DEFAULT_DRONE = DroneModel('cf2x')
@@ -87,6 +88,7 @@ def run(
     print(f"got solved_path: {solved_path.shape}")
     add_gradient_lines(solved_path)
     TARGET_POS = solved_path[:, :3]
+    TARGET_QUAT = solved_path[:, 3:]
     for i in range(0, int(duration_sec*env.CTRL_FREQ)):
 
         #### Step the simulation ###################################
@@ -94,9 +96,11 @@ def run(
 
         #### Compute control for the current way point #############
         if i < solved_path.shape[0]:
+            target_rpy = Rotation.from_quat(TARGET_QUAT[i]).as_euler('xyz')
             action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                 state=obs[0],
                                                                 target_pos=TARGET_POS[i],
+                                                                target_rpy=target_rpy
                                                                 )
         else:
             # set target_pos to last waypoint
@@ -165,14 +169,14 @@ def get_reference_trajectory(obstacle_list: list[int]):
     start().setXYZ(INIT_XYZS[0][0], INIT_XYZS[0][1], INIT_XYZS[0][2])
     start().rotation().setIdentity()
     goal = ob.State(space)
-    goal().setXYZ(2,0,0.15)
+    goal().setXYZ(3,0,0.15)
     goal().rotation().setIdentity()
 
     ss.setStartAndGoalStates(start, goal)
 
     # this will automatically choose a default planner with
     # default parameters
-    solved = ss.solve(5.0)
+    solved = ss.solve(10.0)
 
     # After the path is solved
     if solved:
