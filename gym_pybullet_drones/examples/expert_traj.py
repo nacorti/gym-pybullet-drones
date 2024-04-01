@@ -15,6 +15,13 @@ import time
 import argparse
 import numpy as np
 import pybullet as p
+import math
+import random
+import pprint
+from scipy.interpolate import CubicSpline
+from gym_pybullet_drones.agile_autonomy.spline import Spline
+from gym_pybullet_drones.agile_autonomy.trajectory_ext import TrajectoryExtPoint, TrajectoryExt
+from scipy.spatial.transform import Rotation as R
 
 from gym_pybullet_drones.utils.utils import sync, str2bool
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
@@ -33,7 +40,7 @@ DEFAULT_GUI = True
 DEFAULT_RECORD_VIDEO = False
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 20
+DEFAULT_DURATION_SEC = 12
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 INIT_XYZS = np.array([[0, 0, 0.5]])
@@ -127,9 +134,6 @@ def run(
         #### Sync the simulation ###################################
         if gui:
             sync(i, START, env.CTRL_TIMESTEP)
-
-    #### Close the environment #################################
-    env.close()
     
     ### Augemnt solved_path with velocity and avg acceleration for each point
     vels = logger.get_velocities()
@@ -157,9 +161,32 @@ def run(
     
     print(f"full_reference_traj: {full_reference_traj.shape}")
     
-    print(f"full_reference_traj: {full_reference_traj[1]}")
+    print(f"full_reference_traj: {full_reference_traj[53]}")
     
 
+    mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
+
+    print(f"mh_traj: {len(mh_traj)}")
+
+    
+        #print(f"a sample trajectory: {a_trajectory}")
+    for waypoint in mh_traj:
+        for traj in waypoint:
+            positions = traj.getPositions()
+            pprint.pprint(positions)
+            rfactor = random.random()
+            gfactor = random.random()
+            bfactor = random.random()
+            for point, point2 in pairwise(positions):
+                
+                print(f"point: {point}")
+                x0 = point[0]
+                y0 = point[1]
+                z0 = point[2]
+                x1 = point2[0]
+                y1 = point2[1]
+                z1 = point2[2]
+                p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)            
     #### Save the simulation results ###########################
     logger.save()
     logger.save_as_csv("dw") # Optional CSV save
@@ -167,7 +194,213 @@ def run(
     #### Plot the simulation results ###########################
     if plot:
         logger.plot()
+    
+    #### Close the environment #################################
+    #env.close()
 
+# For each point on reference_traj, calculate 50,000 potential trajectories, each one being
+# a bezier curve with 3 anchor points
+def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[int]):
+    master_rollouts = []
+    for (i, row) in enumerate(reference_traj):
+        if (i % 50) == 0:
+            print(f"processing row {i} of {len(reference_traj)}")
+            position, velocity, acceleration, orientation = row[:3], row[3:6], row[6:9], row[9:]
+            cost = float('inf')
+            prev_cost = float('inf')
+            accept_dist = random.uniform(0, 1)
+            rand_theta = 0.0
+            theta_step = 0.15
+            rand_phi = 0.0
+            phi_step = 0.2
+            bspline_anchors = 3
+            traj_len = 10
+            max_steps_metropolis = 20#5#0000
+            traj_dt = 0.1 # 1/240 #env.CTRL_FREQ
+            t_vec, x_vec, y_vec, z_vec = [0.0], [0.0], [0.0], [0.0]
+            x_vec_prev, y_vec_prev, z_vec_prev = [], [], []
+            rollouts = []
+            for step in range(max_steps_metropolis):
+                print(f"on step {step}")
+                anchor_dt = 1/3 #(traj_dt * traj_len) / bspline_anchors
+                # build t_vec, x_vec, y_vec, z_vec
+                for anchor_idx in range(1, bspline_anchors + 1):
+                    if not x_vec_prev:
+                        # some kind of scary matrix math
+                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(position, rand_theta, rand_phi)
+                        t_vec.append(anchor_idx * anchor_dt)
+                        x_vec.append(x_anchor)
+                        y_vec.append(y_anchor)
+                        z_vec.append(z_anchor)
+                    else:
+                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[-1], y_vec_prev[-1], z_vec_prev[-1]]), rand_theta, rand_phi)
+                        t_vec.append(anchor_idx * anchor_dt)
+                        x_vec.append(x_anchor)
+                        y_vec.append(y_anchor)
+                        z_vec.append(z_anchor)
+                
+                # build the spline from vecs     
+                cand_rollout = createBSpline(t_vec, x_vec, y_vec, z_vec)
+
+                # widen search space progressively
+                if step > 0 and (step - 1) % (max_steps_metropolis / 3) == 0:
+                    # rollouts.sort(key=attrgetter('cost'))
+                    # if len(rollouts) >= save_n_best and rollouts[save_n_best - 1].getCost() < 100.0:
+                    #     if directory != "" and self.verbose_:
+                    #         print("\nFound %d trajectories with cost lower than %.3f, stopping early.\n" % (save_n_best, 100.0))
+                    #     break
+                    rand_theta += theta_step
+                    rand_phi += phi_step
+                
+                # cand_rollout.enableYawing(True)
+                # cand_rollout.convertToFrame(FrameID.World, state_estimate_point.position, state_estimate_point.orientation)
+
+                # cand_rollout.recomputeTrajectory()
+                # self.getRolloutData(cand_rollout)
+
+                # compute cost for each trajectory
+                # self.computeCost(self.state_array_h_, self.reference_states_h_, self.input_array_h_, self.reference_inputs_h_, self.cost_array_h_, self.accumulated_cost_array_h_)
+                in_collision = check_collision(cand_rollout, obstacle_list)
+            
+                if in_collision:
+                    print('in collision')
+                    continue
+
+                state_est_plus = TrajectoryExtPoint()
+                state_est_plus.time_from_start = 0.0
+                state_est_plus.position = position
+                state_est_plus.attitude = orientation
+                state_est_plus.velocity = velocity
+                state_est_plus.acceleration = acceleration
+                cand_rollout.replaceFirstPoint(state_est_plus)
+                # cand_rollout.fitPolynomialCoeffs(8, 1)
+                # cand_rollout.resamplePointsFromPolyCoeffs()
+                # cand_rollout.recomputeTrajectory()
+                # cand_rollout.replaceFirstPoint(state_est_plus)
+                # self.getRolloutData(cand_rollout)
+
+                # self.computeCost(self.state_array_h_, self.reference_states_h_, self.input_array_h_, self.reference_inputs_h_, self.cost_array_h_, self.accumulated_cost_array_h_)
+                # kd_tree.query_kdtree(self.state_array_h_, self.accumulated_cost_array_h_, self.traj_len_, query_every_nth_point, True)
+                
+                cost = random.uniform(0, 1)
+                cand_rollout.setCost(float(cost))
+
+                curr_cost = cand_rollout.getCost()
+                alpha = min(1.0, (math.exp(-0.01 * curr_cost) + 1.0e-7) / (math.exp(-0.01 * prev_cost) + 1.0e-7))
+
+                random_sample = random.uniform(0, 1)
+
+                accept = random_sample <= alpha
+                if accept:
+                    x_vec_prev = x_vec
+                    y_vec_prev = y_vec
+                    z_vec_prev = z_vec
+                    prev_cost = curr_cost
+
+                rollouts.append(cand_rollout)
+
+                print("rollouts.size() = %d\n" % len(rollouts))
+
+                # rollouts.sort(key=attrgetter('cost'))
+            master_rollouts.append(rollouts)
+    return master_rollouts
+
+def check_collision(trajectory: TrajectoryExt, obstacle_list: list[int], l: float = 0.02, w: float = 0.02, h: float = 0.01)->bool:
+    for point in trajectory.points:
+        for obstacle in obstacle_list:
+            obstacle_bounds = p.getAABB(obstacle)
+            # Calculate the bounds of the box around point.position
+            point_bounds = [(point.position[0] - l/2, point.position[1] - w/2, point.position[2] - h/2),
+                            (point.position[0] + l/2, point.position[1] + w/2, point.position[2] + h/2)]
+            # Check if the box around point.position intersects with the obstacle
+            if (point_bounds[0][0] < obstacle_bounds[1][0] and point_bounds[1][0] > obstacle_bounds[0][0] and
+                point_bounds[0][1] < obstacle_bounds[1][1] and point_bounds[1][1] > obstacle_bounds[0][1] and
+                point_bounds[0][2] < obstacle_bounds[1][2] and point_bounds[1][2] > obstacle_bounds[0][2]):
+                return True
+    return False
+
+def createBSpline(t_vec, x_vec, y_vec, z_vec, traj_len=10, traj_dt=0.1)->TrajectoryExt:
+    if len(t_vec) != len(x_vec) or len(t_vec) != len(y_vec) or len(t_vec) != len(z_vec):
+        return False
+
+    bspline_traj = TrajectoryExt()
+    x_spline = Spline()
+    x_spline.set_points(t_vec, x_vec)
+    y_spline = Spline()
+    y_spline.set_points(t_vec, y_vec)
+    z_spline = Spline()
+    z_spline.set_points(t_vec, z_vec)
+
+    # sample the spline, compute trajectory from it
+    for i in range(traj_len):
+        point = TrajectoryExtPoint()
+        time_from_start = traj_dt * i
+        point.position = np.array([x_spline(time_from_start),
+                                   y_spline(time_from_start),
+                                   z_spline(time_from_start)])
+        point.velocity = np.array([x_spline.deriv(1, time_from_start),
+                                   y_spline.deriv(1, time_from_start),
+                                   z_spline.deriv(1, time_from_start)])
+        point.acceleration = np.array([x_spline.deriv(2, time_from_start),
+                                   y_spline.deriv(2, time_from_start),
+                                   z_spline.deriv(2, time_from_start)])
+
+        point.attitude = R.from_quat([0, 0, 0, 1])
+
+        # Attitude
+        point.thrust = point.acceleration + 9.81 * np.array([0, 0, 1])
+        dt = 0.05
+        thrust_before = np.array([x_spline.deriv(2, time_from_start - dt),
+                                  y_spline.deriv(2, time_from_start - dt),
+                                 z_spline.deriv(2, time_from_start - dt)])
+        thrust_after = np.array([x_spline.deriv(2, time_from_start + dt),
+                                 y_spline.deriv(2, time_from_start + dt),
+                                 z_spline.deriv(2, time_from_start + dt)])
+
+        I_eZ_I = np.array([0.0, 0.0, 1.0])
+        q_pitch_roll = R.from_rotvec(np.cross(I_eZ_I, point.thrust))
+
+        # linvel_body = q_pitch_roll.inv().apply(point.velocity) # unused
+        heading = np.arctan2(point.velocity[1], point.velocity[0])
+
+        q_heading = R.from_rotvec([0, 0, heading])
+        q_att = q_pitch_roll * q_heading
+        q_att = R.from_quat(q_att.as_quat() / np.linalg.norm(q_att.as_quat()))
+        point.attitude = q_att
+
+        # Inputs
+        point.collective_thrust = np.linalg.norm(point.thrust)
+        thrust_before = thrust_before / np.linalg.norm(thrust_before)
+        thrust_after = thrust_after / np.linalg.norm(thrust_after)
+        crossProd = np.cross(thrust_before, thrust_after)
+        angular_rates_wf = np.array([0.0, 0.0, 0.0])
+        if np.linalg.norm(crossProd) > 0.0:
+            angular_rates_wf = np.arccos(
+                min(1.0, max(-1.0, np.dot(thrust_before, thrust_after)))) / dt * crossProd / (
+                                       np.linalg.norm(crossProd) + 1.e-5)
+        point.bodyrates = q_att.inv().apply(angular_rates_wf)
+
+        bspline_traj.addPoint(point)
+
+    return bspline_traj
+
+def sampleAnchorPoint(ref_pos: np.ndarray, rand_theta: float, rand_phi: float):
+    radius = np.linalg.norm(ref_pos)
+    ref_theta = np.arccos(ref_pos[2] / radius)
+    ref_phi = np.arctan2(ref_pos[1], ref_pos[0])
+
+    # we sample anchor points in spherical coordinates in the body frame
+    theta = random.uniform(ref_theta - rand_theta, ref_theta + rand_theta)
+    phi = random.uniform(ref_phi - rand_phi, ref_phi + rand_phi)
+
+    # convert to cartesian coordinates
+    anchor_pos_x = radius * np.sin(theta) * np.cos(phi)
+    anchor_pos_y = radius * np.sin(theta) * np.sin(phi)
+    anchor_pos_z = radius * np.cos(theta)
+
+    return anchor_pos_x, anchor_pos_y, anchor_pos_z       
+    
+    
 # Use python OMPL bindings to compute a reference trajectory
 def get_reference_trajectory(obstacle_list: list[int]):
     space = ob.SE3StateSpace()
