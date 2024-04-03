@@ -33,6 +33,7 @@ from ompl import base as ob
 from ompl import geometric as og
 import itertools
 from scipy.spatial.transform import Rotation
+from bezier import Curve
 
 
 DEFAULT_DRONE = DroneModel('cf2x')
@@ -168,25 +169,6 @@ def run(
 
     print(f"mh_traj: {len(mh_traj)}")
 
-    
-        #print(f"a sample trajectory: {a_trajectory}")
-    for waypoint in mh_traj:
-        for traj in waypoint:
-            positions = traj.getPositions()
-            pprint.pprint(positions)
-            rfactor = random.random()
-            gfactor = random.random()
-            bfactor = random.random()
-            for point, point2 in pairwise(positions):
-                
-                print(f"point: {point}")
-                x0 = point[0]
-                y0 = point[1]
-                z0 = point[2]
-                x1 = point2[0]
-                y1 = point2[1]
-                z1 = point2[2]
-                p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)            
     #### Save the simulation results ###########################
     logger.save()
     logger.save_as_csv("dw") # Optional CSV save
@@ -202,9 +184,9 @@ def run(
 # a bezier curve with 3 anchor points
 def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[int]):
     master_rollouts = []
-    for (i, row) in enumerate(reference_traj):
-        if (i % 50) == 0:
-            print(f"processing row {i} of {len(reference_traj)}")
+    for (rowNum, row) in enumerate(reference_traj):
+        if (rowNum % 50) == 0:
+            print(f"processing row {rowNum} of {len(reference_traj)}")
             position, velocity, acceleration, orientation = row[:3], row[3:6], row[6:9], row[9:]
             cost = float('inf')
             prev_cost = float('inf')
@@ -217,29 +199,46 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
             traj_len = 10
             max_steps_metropolis = 20#5#0000
             traj_dt = 0.1 # 1/240 #env.CTRL_FREQ
-            t_vec, x_vec, y_vec, z_vec = [0.0], [0.0], [0.0], [0.0]
-            x_vec_prev, y_vec_prev, z_vec_prev = [], [], []
             rollouts = []
+            x, y, z = position
             for step in range(max_steps_metropolis):
-                print(f"on step {step}")
+                t_vec, x_vec, y_vec, z_vec = [], [], [], []
+                x_vec_prev, y_vec_prev, z_vec_prev = [], [], []
+                print(f"on step {step} of row {rowNum}")
                 anchor_dt = 1/3 #(traj_dt * traj_len) / bspline_anchors
                 # build t_vec, x_vec, y_vec, z_vec
-                for anchor_idx in range(1, bspline_anchors + 1):
-                    if not x_vec_prev:
-                        # some kind of scary matrix math
-                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(position, rand_theta, rand_phi)
+                # since we only have 3 anchors, we can guarantee that the first anchor
+                # will be colocated with the drone. The second anchor will be the end of the trajectory
+                # so only the middle anchor will not necessarily be on the trajectory
+                for anchor_idx in range(0, bspline_anchors):
+                    access_index = rowNum + (3*anchor_idx)
+                    print(f"access_index: {access_index}")
+                    ref_pos_at_curr_time = reference_traj[access_index][:3]
+                    print(f"ref_pos_at_curr_time: {ref_pos_at_curr_time}")
+                    if len(x_vec_prev) == 0:
+                        print("no x_vec_prev")
+                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(ref_pos_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
                         y_vec.append(y_anchor)
                         z_vec.append(z_anchor)
                     else:
-                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[-1], y_vec_prev[-1], z_vec_prev[-1]]), rand_theta, rand_phi)
+                        print("x_vec_prev")
+                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[anchor_idx], y_vec_prev[anchor_idx], z_vec_prev[anchor_idx]]), rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
                         y_vec.append(y_anchor)
                         z_vec.append(z_anchor)
                 
-                # build the spline from vecs     
+                # plot the anchor points from the vec arrays
+                rfactor = random.random()
+                gfactor = random.random()
+                bfactor = random.random()
+                print(f"x_vec: {x_vec}, y_vec: {y_vec}, z_vec: {z_vec}")
+                for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(zip(x_vec, y_vec, z_vec))):
+                    p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)   
+                    
+                # build the spline from vecs 
                 cand_rollout = createBSpline(t_vec, x_vec, y_vec, z_vec)
 
                 # widen search space progressively
@@ -282,16 +281,17 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 # self.computeCost(self.state_array_h_, self.reference_states_h_, self.input_array_h_, self.reference_inputs_h_, self.cost_array_h_, self.accumulated_cost_array_h_)
                 # kd_tree.query_kdtree(self.state_array_h_, self.accumulated_cost_array_h_, self.traj_len_, query_every_nth_point, True)
                 
-                cost = random.uniform(0, 1)
+                cost = computeCost(cand_rollout.getPositions(), reference_traj[i:i+10])
                 cand_rollout.setCost(float(cost))
 
                 curr_cost = cand_rollout.getCost()
                 alpha = min(1.0, (math.exp(-0.01 * curr_cost) + 1.0e-7) / (math.exp(-0.01 * prev_cost) + 1.0e-7))
-
+                print(f"alpha: {alpha}")
                 random_sample = random.uniform(0, 1)
 
                 accept = random_sample <= alpha
                 if accept:
+                    print('accepted!')
                     x_vec_prev = x_vec
                     y_vec_prev = y_vec
                     z_vec_prev = z_vec
@@ -385,9 +385,10 @@ def createBSpline(t_vec, x_vec, y_vec, z_vec, traj_len=10, traj_dt=0.1)->Traject
     return bspline_traj
 
 def sampleAnchorPoint(ref_pos: np.ndarray, rand_theta: float, rand_phi: float):
+    x, y, z = ref_pos
     radius = np.linalg.norm(ref_pos)
-    ref_theta = np.arccos(ref_pos[2] / radius)
-    ref_phi = np.arctan2(ref_pos[1], ref_pos[0])
+    ref_theta = np.arccos(z / radius)
+    ref_phi = np.arctan2(y, x)
 
     # we sample anchor points in spherical coordinates in the body frame
     theta = random.uniform(ref_theta - rand_theta, ref_theta + rand_theta)
@@ -400,7 +401,24 @@ def sampleAnchorPoint(ref_pos: np.ndarray, rand_theta: float, rand_phi: float):
 
     return anchor_pos_x, anchor_pos_y, anchor_pos_z       
     
-    
+
+def computeCost(state_array, reference_states):
+    exponent = 2.0
+    traj_len = 10
+    cost_array = np.zeros(traj_len + 1)
+    Q_xy_ = 100.0
+    Q_z_ = 300.0
+    for (i, (traj_state, reference_state)) in enumerate(zip(state_array, reference_states)):
+        cost_array[i] = (
+            Q_xy_ * np.abs(np.power(traj_state[0] - reference_state[0], exponent)) +
+            Q_xy_ * np.abs(np.power(traj_state[1] - reference_state[1], exponent)) +
+            Q_z_ * np.abs(np.power(traj_state[2] - reference_state[2], exponent))
+        )
+
+    accumulated_cost = np.sum(cost_array) / traj_len
+
+    return accumulated_cost
+
 # Use python OMPL bindings to compute a reference trajectory
 def get_reference_trajectory(obstacle_list: list[int]):
     space = ob.SE3StateSpace()
