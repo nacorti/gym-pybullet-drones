@@ -202,7 +202,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
             rollouts = []
             x, y, z = position
             for step in range(max_steps_metropolis):
-                t_vec, x_vec, y_vec, z_vec = [], [], [], []
+                t_vec, x_vec, y_vec, z_vec = [0], [x], [y], [z]
                 x_vec_prev, y_vec_prev, z_vec_prev = [], [], []
                 print(f"on step {step} of row {rowNum}")
                 anchor_dt = 1/3 #(traj_dt * traj_len) / bspline_anchors
@@ -210,21 +210,21 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 # since we only have 3 anchors, we can guarantee that the first anchor
                 # will be colocated with the drone. The second anchor will be the end of the trajectory
                 # so only the middle anchor will not necessarily be on the trajectory
-                for anchor_idx in range(0, bspline_anchors):
-                    access_index = rowNum + (3*anchor_idx)
+                for anchor_idx in range(1, bspline_anchors+1):
+                    access_index = rowNum + (16*anchor_idx)
                     print(f"access_index: {access_index}")
-                    ref_pos_at_curr_time = reference_traj[access_index][:3]
+                    ref_pos_at_curr_time, ref_vel_at_curr_time = reference_traj[access_index][:3], reference_traj[access_index][3:6]
                     print(f"ref_pos_at_curr_time: {ref_pos_at_curr_time}")
                     if len(x_vec_prev) == 0:
                         print("no x_vec_prev")
-                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(ref_pos_at_curr_time, rand_theta, rand_phi)
+                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(ref_pos_at_curr_time, ref_vel_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
                         y_vec.append(y_anchor)
                         z_vec.append(z_anchor)
                     else:
                         print("x_vec_prev")
-                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[anchor_idx], y_vec_prev[anchor_idx], z_vec_prev[anchor_idx]]), rand_theta, rand_phi)
+                        x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[anchor_idx], y_vec_prev[anchor_idx], z_vec_prev[anchor_idx]]), ref_vel_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
                         y_vec.append(y_anchor)
@@ -234,9 +234,11 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 rfactor = random.random()
                 gfactor = random.random()
                 bfactor = random.random()
-                print(f"x_vec: {x_vec}, y_vec: {y_vec}, z_vec: {z_vec}")
-                for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(zip(x_vec, y_vec, z_vec))):
-                    p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)   
+                DRAW_ANCHOR_POINTS = True
+                if DRAW_ANCHOR_POINTS:
+                    print(f"x_vec: {x_vec}, y_vec: {y_vec}, z_vec: {z_vec}")
+                    for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(zip(x_vec, y_vec, z_vec))):
+                        p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)   
                     
                 # build the spline from vecs 
                 cand_rollout = createBSpline(t_vec, x_vec, y_vec, z_vec)
@@ -271,7 +273,8 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 state_est_plus.attitude = orientation
                 state_est_plus.velocity = velocity
                 state_est_plus.acceleration = acceleration
-                cand_rollout.replaceFirstPoint(state_est_plus)
+                #print(f"replace {cand_rollout.points[0].position} with {state_est_plus.position}")
+                # cand_rollout.replaceFirstPoint(state_est_plus)
                 # cand_rollout.fitPolynomialCoeffs(8, 1)
                 # cand_rollout.resamplePointsFromPolyCoeffs()
                 # cand_rollout.recomputeTrajectory()
@@ -283,6 +286,10 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 
                 cost = computeCost(cand_rollout.getPositions(), reference_traj[i:i+10])
                 cand_rollout.setCost(float(cost))
+                DRAW_FULL_TRAJECTORY = True
+                if DRAW_FULL_TRAJECTORY:
+                    for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
+                        p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
 
                 curr_cost = cand_rollout.getCost()
                 alpha = min(1.0, (math.exp(-0.01 * curr_cost) + 1.0e-7) / (math.exp(-0.01 * prev_cost) + 1.0e-7))
@@ -384,9 +391,10 @@ def createBSpline(t_vec, x_vec, y_vec, z_vec, traj_len=10, traj_dt=0.1)->Traject
 
     return bspline_traj
 
-def sampleAnchorPoint(ref_pos: np.ndarray, rand_theta: float, rand_phi: float):
-    x, y, z = ref_pos
-    radius = np.linalg.norm(ref_pos)
+def sampleAnchorPoint(ref_pos: np.ndarray, ref_vel: np.ndarray, rand_theta: float, rand_phi: float):
+    x_pos, y_pos, z_pos = ref_pos
+    x, y, z = ref_vel
+    radius = np.linalg.norm(ref_vel)
     ref_theta = np.arccos(z / radius)
     ref_phi = np.arctan2(y, x)
 
@@ -395,9 +403,10 @@ def sampleAnchorPoint(ref_pos: np.ndarray, rand_theta: float, rand_phi: float):
     phi = random.uniform(ref_phi - rand_phi, ref_phi + rand_phi)
 
     # convert to cartesian coordinates
-    anchor_pos_x = radius * np.sin(theta) * np.cos(phi)
-    anchor_pos_y = radius * np.sin(theta) * np.sin(phi)
-    anchor_pos_z = radius * np.cos(theta)
+    projection_radius = radius/5
+    anchor_pos_x = x_pos + (projection_radius * np.sin(theta) * np.cos(phi))
+    anchor_pos_y = y_pos + (projection_radius * np.sin(theta) * np.sin(phi))
+    anchor_pos_z = z_pos + (projection_radius * np.cos(theta))
 
     return anchor_pos_x, anchor_pos_y, anchor_pos_z       
     
