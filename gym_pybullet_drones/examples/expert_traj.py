@@ -33,7 +33,6 @@ from ompl import base as ob
 from ompl import geometric as og
 import itertools
 from scipy.spatial.transform import Rotation
-from bezier import Curve
 
 
 DEFAULT_DRONE = DroneModel('cf2x')
@@ -101,7 +100,6 @@ def run(
 
         #### Step the simulation ###################################
         obs, reward, terminated, truncated, info = env.step(action)
-
         #### Compute control for the current way point #############
         if i < solved_path.shape[0]:
             target_rpy = Rotation.from_quat(TARGET_QUAT[i]).as_euler('xyz')

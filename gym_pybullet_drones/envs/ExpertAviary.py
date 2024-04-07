@@ -15,7 +15,8 @@ import pybullet_data
 import gymnasium as gym
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 from gym_pybullet_drones.envs.BaseAviary import BaseAviary
-from gym_pybullet_drones.utils.enums import DroneModel, Physics
+from gym_pybullet_drones.utils.enums import DroneModel, Physics, ActionType, ObservationType, ImageType
+
 
 class ExpertAviary(BaseAviary):
     """Gets expert trajectory for drone given obstacles."""
@@ -36,6 +37,7 @@ class ExpertAviary(BaseAviary):
                  user_debug_gui=True,
                  output_folder='results'
                  ):
+        self.OBS_TYPE = ObservationType.KIN_DEPTH
         super().__init__(drone_model=drone_model,
                          num_drones=1,
                          neighbourhood_radius=neighbourhood_radius,
@@ -48,7 +50,8 @@ class ExpertAviary(BaseAviary):
                          record=record,
                          obstacles=obstacles,
                          user_debug_gui=user_debug_gui,
-                         output_folder=output_folder
+                         output_folder=output_folder,
+                         vision_attributes=True
                          )
     
     def get_obstacle_list(self):
@@ -121,7 +124,52 @@ class ExpertAviary(BaseAviary):
             An ndarray of shape (NUM_DRONES, 20) with the state of each drone.
 
         """
-        return np.array([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
+        if self.OBS_TYPE == ObservationType.RGB:
+            if self.step_counter%self.IMG_CAPTURE_FREQ == 0:
+                for i in range(self.NUM_DRONES):
+                    self.rgb[i], self.dep[i], self.seg[i] = self._getDroneImages(i,
+                                                                                 segmentation=False
+                                                                                 )
+                    #### Printing observation to PNG frames example ############
+                    if self.RECORD:
+                        self._exportImage(img_type=ImageType.RGB,
+                                          img_input=self.rgb[i],
+                                          path=self.ONBOARD_IMG_PATH+"drone_"+str(i),
+                                          frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ)
+                                          )
+            return np.array([self.rgb[i] for i in range(self.NUM_DRONES)]).astype('float32')
+        elif self.OBS_TYPE == ObservationType.KIN:
+            ############################################################
+            #### OBS SPACE OF SIZE 12
+            obs_12 = np.zeros((self.NUM_DRONES,12))
+            for i in range(self.NUM_DRONES):
+                #obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
+                obs = self._getDroneStateVector(i)
+                obs_12[i, :] = np.hstack([obs[0:3], obs[7:10], obs[10:13], obs[13:16]]).reshape(12,)
+            ret = np.array([obs_12[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
+            #### Add action buffer to observation #######################
+            for i in range(self.ACTION_BUFFER_SIZE):
+                ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
+            return ret
+            ############################################################
+        elif self.OBS_TYPE == ObservationType.KIN_DEPTH:
+            if self.step_counter%self.IMG_CAPTURE_FREQ == 0:
+                for i in range(self.NUM_DRONES):
+                    self.rgb[i], self.dep[i], self.seg[i] = self._getDroneImages(i,
+                                                                                 segmentation=False
+                                                                                 )
+                    #### Printing observation to PNG frames example ############
+                    if self.RECORD and False:
+                        self._exportImage(img_type=ImageType.RGB,
+                                          img_input=self.rgb[i],
+                                          path=self.ONBOARD_IMG_PATH+"drone_"+str(i),
+                                          frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ)
+                                          )
+            depth = np.array([self.dep[i] for i in range(self.NUM_DRONES)]).astype('float32')
+            state_vec = np.array([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
+            return state_vec # np.array([np.hstack([state_vec[i], depth[i]]) for i in range(self.NUM_DRONES)])
+        else:
+            print("[ERROR] in ExpertAviary._computeObs()")
 
     ################################################################################
     
