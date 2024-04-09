@@ -16,6 +16,9 @@ import gymnasium as gym
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 from gym_pybullet_drones.envs.BaseAviary import BaseAviary
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ActionType, ObservationType, ImageType
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+
 
 
 class ExpertAviary(BaseAviary):
@@ -32,12 +35,16 @@ class ExpertAviary(BaseAviary):
                  pyb_freq: int = 240,
                  ctrl_freq: int = 240,
                  gui=False,
-                 record=False,
+                 record=True,
                  obstacles=False,
                  user_debug_gui=True,
                  output_folder='results'
                  ):
         self.OBS_TYPE = ObservationType.KIN_DEPTH
+        self.OUTPUT_FOLDER = 'results'
+        self.ONBOARD_IMG_PATH = os.path.join(self.OUTPUT_FOLDER, "recording_" + datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+        os.makedirs(os.path.dirname(self.ONBOARD_IMG_PATH), exist_ok=True)
+        os.makedirs(os.path.dirname(self.ONBOARD_IMG_PATH+"/drone_0/"), exist_ok=True)
         super().__init__(drone_model=drone_model,
                          num_drones=1,
                          neighbourhood_radius=neighbourhood_radius,
@@ -159,18 +166,66 @@ class ExpertAviary(BaseAviary):
                                                                                  segmentation=False
                                                                                  )
                     #### Printing observation to PNG frames example ############
-                    if self.RECORD and False:
-                        self._exportImage(img_type=ImageType.RGB,
-                                          img_input=self.rgb[i],
-                                          path=self.ONBOARD_IMG_PATH+"drone_"+str(i),
+                    if True:
+                        print(f"Saving image {i}")
+                        raw_depth = self.dep[i]
+                        normalized_depth = (raw_depth-np.min(raw_depth)) / (np.max(raw_depth)-np.min(raw_depth))
+                        converted_depth = self.convertDepthToRealSense(normalized_depth)
+                        self._exportImage(img_type=ImageType.DEP, img_input=raw_depth, path=self.ONBOARD_IMG_PATH+"/drone_"+str(i), frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ))
+                        self._exportImage(img_type=ImageType.RGB_ONLY,
+                                          img_input=converted_depth,
+                                          path=self.ONBOARD_IMG_PATH+"/drone_"+str(i),
                                           frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ)
                                           )
-            depth = np.array([self.dep[i] for i in range(self.NUM_DRONES)]).astype('float32')
             state_vec = np.array([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
             return state_vec # np.array([np.hstack([state_vec[i], depth[i]]) for i in range(self.NUM_DRONES)])
         else:
             print("[ERROR] in ExpertAviary._computeObs()")
 
+    # Intel Realsense cameras represent depth as an RGB value where the three channels represent the depth in meters
+    # Blue is close, green is further, and red is the furthest. When a point in the depth image is beyond the max
+    # range of the camera, the pixel will be black (0,0,0).
+    # Since PyBullet's depth camera returns a scalar value from 0 to 1, we need to convert the depth image 
+    # from PyBullet to the format of the Intel Realsense camera.
+    def convertDepthToRealSense(self, depth: np.ndarray):
+        # Define the start and end colors for each transition
+        blue_to_green_start = np.array([0, 0, 1])
+        blue_to_green_end = np.array([0, 1, 0])
+
+        green_to_red_start = np.array([0, 1, 0])
+        green_to_red_end = np.array([1, 0, 0])
+
+        red_to_black_start = np.array([1, 0, 0])
+        red_to_black_end = np.array([0, 0, 0])
+
+        # Generate 13 colors for the blue_to_green and green_to_red transitions
+        blue_to_green = [tuple(x) for x in np.linspace(blue_to_green_start, blue_to_green_end, 30)[:-1]]
+        green_to_red = [tuple(x) for x in np.linspace(green_to_red_start, green_to_red_end, 30)[:-1]]
+
+        # Generate 6 colors for the red_to_black transition (60% less than 13)
+        red_to_black = [tuple(x) for x in np.linspace(red_to_black_start, red_to_black_end, 3)[:-1]]
+
+        # Combine all the colors and add the final black color
+        colors = blue_to_green + green_to_red + red_to_black + [(0, 0, 0)]
+
+        # Create the colormap
+        colormap = LinearSegmentedColormap.from_list("custom_colormap", colors)
+
+        # Apply the colormap to get an RGB image and scale it to [0, 255]
+        rgb_image = (colormap(depth)[:, :, :3] * 255).astype(np.uint8)
+        #rgb_image = (colormap(depth) * 255).astype(np.uint8)
+        print(f"depth_input: {depth.shape}")
+        print(f"output: {rgb_image.shape}")
+        print(depth)
+        print(rgb_image)
+        #rgb_image = plt.cm.viridis(depth)[:, :, :3]
+        
+        print(f"max_depth: {np.max(depth)}")
+        print(f"min_depth: {np.min(depth)}")
+        print(f"max_converted: {np.max(rgb_image)}")
+        print(f"min_converted: {np.min(rgb_image)}")
+        return rgb_image
+        
     ################################################################################
     
     def _computeReward(self):
@@ -251,19 +306,19 @@ class ExpertAviary(BaseAviary):
         #            p.getQuaternionFromEuler([0, 0, 0]),
         #            physicsClientId=self.CLIENT
         #            )
-        sphere = p.loadURDF("sphere2.urdf",
-                   [1, 0, .5],
-                   p.getQuaternionFromEuler([0,0,0]),
-                   physicsClientId=self.CLIENT
-                   )
-        self.obstacle_list.append(sphere)
-        print(f"obstacle_list: {self.obstacle_list[0]}")
+        # sphere = p.loadURDF("sphere2.urdf",
+        #            [1, 0, .5],
+        #            p.getQuaternionFromEuler([0,0,0]),
+        #            physicsClientId=self.CLIENT
+        #            )
+        # self.obstacle_list.append(sphere)
+        # print(f"obstacle_list: {self.obstacle_list[0]}")
         # p.loadURDF("../assets/cylinder.urdf",
         #            [0, -2, 2.5],
         #            p.getQuaternionFromEuler([0,0,0]),
         #            physicsClientId=self.CLIENT
         # )
-        self.distribute_cylinders(1, -2, -3, 4, 3)
+        self.distribute_cylinders(10, .5, -3, 5, 3)
                     
 
     def distribute_cylinders(self, N, x1, y1, x2, y2):
@@ -282,7 +337,8 @@ class ExpertAviary(BaseAviary):
                 cylinder_pos, _ = p.getBasePositionAndOrientation(cylinder)
                 dist_sq = (cylinder_pos[0] - x) ** 2 + (cylinder_pos[1] - y) ** 2
                 dist_from_origin = x ** 2 + y ** 2
-                if (dist_sq < (2 * CYLINDER_RADIUS) ** 2) or (dist_from_origin < (2 * CYLINDER_RADIUS) ** 2):  # If distance is less than twice the radius, they intersect
+                dist_from_goal = (x - 3) ** 2 + y ** 2
+                if (dist_sq < (2 * CYLINDER_RADIUS) ** 2) or (dist_from_origin < (CYLINDER_RADIUS) ** 2) or (dist_from_goal < CYLINDER_RADIUS ** 2):  # If distance is less than twice the radius, they intersect
                     too_close = True
                     break
 

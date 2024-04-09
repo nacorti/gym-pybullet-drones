@@ -137,7 +137,7 @@ class BaseAviary(gym.Env):
             os.makedirs(os.path.dirname(self.ONBOARD_IMG_PATH), exist_ok=True)
         self.VISION_ATTR = vision_attributes
         if self.VISION_ATTR:
-            self.IMG_RES = np.array([64,48]) #np.array([640, 480])
+            self.IMG_RES = np.array([640, 480]) #np.array([64,48]) 
             self.IMG_FRAME_PER_SEC = 24
             self.IMG_CAPTURE_FREQ = int(self.PYB_FREQ/self.IMG_FRAME_PER_SEC)
             self.rgb = np.zeros(((self.NUM_DRONES, self.IMG_RES[1], self.IMG_RES[0], 4)))
@@ -606,8 +606,8 @@ class BaseAviary(gym.Env):
                                              )
         DRONE_CAM_PRO =  p.computeProjectionMatrixFOV(fov=60.0,
                                                       aspect=1.0,
-                                                      nearVal=self.L,
-                                                      farVal=1000.0
+                                                      nearVal=0.1,
+                                                      farVal=5
                                                       )
         SEG_FLAG = p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX if segmentation else p.ER_NO_SEGMENTATION_MASK
         [w, h, rgb, dep, seg] = p.getCameraImage(width=self.IMG_RES[0],
@@ -616,7 +616,8 @@ class BaseAviary(gym.Env):
                                                  viewMatrix=DRONE_CAM_VIEW,
                                                  projectionMatrix=DRONE_CAM_PRO,
                                                  flags=SEG_FLAG,
-                                                 physicsClientId=self.CLIENT
+                                                 physicsClientId=self.CLIENT,
+                                                 renderer=p.ER_BULLET_HARDWARE_OPENGL
                                                  )
         rgb = np.reshape(rgb, (h, w, 4))
         dep = np.reshape(dep, (h, w))
@@ -648,6 +649,8 @@ class BaseAviary(gym.Env):
         """
         if img_type == ImageType.RGB:
             (Image.fromarray(img_input.astype('uint8'), 'RGBA')).save(os.path.join(path,"frame_"+str(frame_num)+".png"))
+        elif img_type == ImageType.RGB_ONLY:
+            (Image.fromarray(img_input.astype('uint8'), 'RGB')).save(os.path.join(path,"frame_"+str(frame_num)+".png"))
         elif img_type == ImageType.DEP:
             temp = ((img_input-np.min(img_input)) * 255 / (np.max(img_input)-np.min(img_input))).astype('uint8')
         elif img_type == ImageType.SEG:
@@ -657,8 +660,8 @@ class BaseAviary(gym.Env):
         else:
             print("[ERROR] in BaseAviary._exportImage(), unknown ImageType")
             exit()
-        if img_type != ImageType.RGB:
-            (Image.fromarray(temp)).save(os.path.join(path,"frame_"+str(frame_num)+".png"))
+        if img_type != ImageType.RGB and img_type != ImageType.RGB_ONLY:
+            (Image.fromarray(temp)).save(os.path.join(path,"frame_"+str(frame_num)+"_bw.png"))
 
     ################################################################################
 

@@ -163,9 +163,9 @@ def run(
     print(f"full_reference_traj: {full_reference_traj[53]}")
     
 
-    mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
+    #mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
 
-    print(f"mh_traj: {len(mh_traj)}")
+    #print(f"mh_traj: {len(mh_traj)}")
 
     #### Save the simulation results ###########################
     logger.save()

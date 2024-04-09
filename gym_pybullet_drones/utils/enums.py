@@ -29,6 +29,7 @@ class ImageType(Enum):
     DEP = 1     # Depth
     SEG = 2     # Segmentation by object id
     BW = 3      # Black and white
+    RGB_ONLY = 4 # Red, green, blue (no alpha)
 
 ################################################################################
 
