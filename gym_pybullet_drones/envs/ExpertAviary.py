@@ -211,45 +211,20 @@ class ExpertAviary(BaseAviary):
         
         # Create the colormap
         colormap = LinearSegmentedColormap.from_list("custom_colormap", colors)
+    
         
-        # custom bootleg jet colormap with black at the end
-        jet_colors = {
-            #'black':  ((0.00, 0, 0)),
-            'red':   ((0.00, 0, 0),
-                       (0.35, 0, 0),
-                       (0.66, 1, 1),
-                       (0.89, 1, 1),
-                       (1.00, 0.5, 0.5)),
-            'green': ((0.000, 0, 0),
-                       (0.125, 0, 0),
-                       (0.375, 1, 1),
-                       (0.640, 1, 1),
-                       (0.910, 0, 0),
-                       (1.000, 0, 0)),
-            'blue':  ((0.00, 0.5, 0.5),
-                       (0.11, 1, 1),
-                       (0.34, 1, 1),
-                       (0.65, 0, 0),
-                       (1.00, 0, 0))
-        }
-        
-        jet_colormap = ListedColormap(jet_colors, name='jet')
-
+        noised_depth = depth + np.random.normal(0, 0.05, depth.shape)
         # Apply the colormap to get an RGB image and scale it to [0, 255]
-        rgb_image = (colormap(depth)[:, :, :3] * 255).astype(np.uint8)
-        #rgb_image = (plt.cm.jet(depth)[:,:,:3] * 255).astype(np.uint8)
-        #rgb_image = (jet_colormap(depth)[:,:,:3] * 255).astype(np.uint8)
-        #rgb_image = (colormap(depth) * 255).astype(np.uint8)
-        print(f"depth_input: {depth.shape}")
-        print(f"output: {rgb_image.shape}")
-        print(depth)
-        print(rgb_image)
-        #rgb_image = plt.cm.viridis(depth)[:, :, :3]
+        rgb_image = (colormap(noised_depth)[:, :, :3] * 255).astype(np.uint8)
+        # print(f"depth_input: {depth.shape}")
+        # print(f"output: {rgb_image.shape}")
+        # print(depth)
+        # print(rgb_image)
         
-        print(f"max_depth: {np.max(depth)}")
-        print(f"min_depth: {np.min(depth)}")
-        print(f"max_converted: {np.max(rgb_image)}")
-        print(f"min_converted: {np.min(rgb_image)}")
+        # print(f"max_depth: {np.max(depth)}")
+        # print(f"min_depth: {np.min(depth)}")
+        # print(f"max_converted: {np.max(rgb_image)}")
+        # print(f"min_converted: {np.min(rgb_image)}")
         return rgb_image
         
     ################################################################################
