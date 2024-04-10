@@ -17,7 +17,7 @@ from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 from gym_pybullet_drones.envs.BaseAviary import BaseAviary
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ActionType, ObservationType, ImageType
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 
 
 
@@ -203,16 +203,42 @@ class ExpertAviary(BaseAviary):
         green_to_red = [tuple(x) for x in np.linspace(green_to_red_start, green_to_red_end, 30)[:-1]]
 
         # Generate 6 colors for the red_to_black transition (60% less than 13)
-        red_to_black = [tuple(x) for x in np.linspace(red_to_black_start, red_to_black_end, 3)[:-1]]
+        red_to_black = [tuple(x) for x in np.linspace(red_to_black_start, red_to_black_end, 30)[:-1]]
 
         # Combine all the colors and add the final black color
         colors = blue_to_green + green_to_red + red_to_black + [(0, 0, 0)]
 
+        
         # Create the colormap
         colormap = LinearSegmentedColormap.from_list("custom_colormap", colors)
+        
+        # custom bootleg jet colormap with black at the end
+        jet_colors = {
+            #'black':  ((0.00, 0, 0)),
+            'red':   ((0.00, 0, 0),
+                       (0.35, 0, 0),
+                       (0.66, 1, 1),
+                       (0.89, 1, 1),
+                       (1.00, 0.5, 0.5)),
+            'green': ((0.000, 0, 0),
+                       (0.125, 0, 0),
+                       (0.375, 1, 1),
+                       (0.640, 1, 1),
+                       (0.910, 0, 0),
+                       (1.000, 0, 0)),
+            'blue':  ((0.00, 0.5, 0.5),
+                       (0.11, 1, 1),
+                       (0.34, 1, 1),
+                       (0.65, 0, 0),
+                       (1.00, 0, 0))
+        }
+        
+        jet_colormap = ListedColormap(jet_colors, name='jet')
 
         # Apply the colormap to get an RGB image and scale it to [0, 255]
         rgb_image = (colormap(depth)[:, :, :3] * 255).astype(np.uint8)
+        #rgb_image = (plt.cm.jet(depth)[:,:,:3] * 255).astype(np.uint8)
+        #rgb_image = (jet_colormap(depth)[:,:,:3] * 255).astype(np.uint8)
         #rgb_image = (colormap(depth) * 255).astype(np.uint8)
         print(f"depth_input: {depth.shape}")
         print(f"output: {rgb_image.shape}")
