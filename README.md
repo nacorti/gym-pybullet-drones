@@ -47,6 +47,14 @@ python learn.py # task: single drone hover at z == 1.0
 python learn.py --multiagent true # task: 2-drone hover at z == 1.2 and 0.7
 ```
 
+### Ruben start here
+
+This repo is organized into "Aviaries", each of which is a training environment.
+I created an aviary called `ExpertAviary` to generate the data for the privileged expert. I also created a simple class to instantiate this in `expert_traj.py`, so
+simply running `python expert_traj.py` should open a running example. I'll note that
+when you turn on images by changing the `OBSERVATION_TYPE` from `KIN` to `KIN_DEPTH`,
+you'll find that the simulation environment slows down significantly. 
+
 <img src="gym_pybullet_drones/assets/rl.gif" alt="rl example" width="375"> <img src="gym_pybullet_drones/assets/marl.gif" alt="marl example" width="375">
 
 ### utiasDSL `pycffirmware` Python Bindings example (multiplatform, single-drone)

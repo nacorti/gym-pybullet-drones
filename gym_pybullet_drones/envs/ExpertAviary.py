@@ -40,9 +40,12 @@ class ExpertAviary(BaseAviary):
                  user_debug_gui=True,
                  output_folder='results'
                  ):
-        self.OBS_TYPE = ObservationType.KIN_DEPTH
+        # Ruben - change this to KIN_DEPTH to get depth images
+        self.OBS_TYPE = ObservationType.KIN #ObservationType.KIN_DEPTH
         self.OUTPUT_FOLDER = 'results'
         self.ONBOARD_IMG_PATH = os.path.join(self.OUTPUT_FOLDER, "recording_" + datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+        #### Create a buffer for the last .5 sec of actions ########
+        self.ACTION_BUFFER_SIZE = int(ctrl_freq//2)
         os.makedirs(os.path.dirname(self.ONBOARD_IMG_PATH), exist_ok=True)
         os.makedirs(os.path.dirname(self.ONBOARD_IMG_PATH+"/drone_0/"), exist_ok=True)
         super().__init__(drone_model=drone_model,
@@ -146,18 +149,19 @@ class ExpertAviary(BaseAviary):
                                           )
             return np.array([self.rgb[i] for i in range(self.NUM_DRONES)]).astype('float32')
         elif self.OBS_TYPE == ObservationType.KIN:
+            return np.array([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
             ############################################################
-            #### OBS SPACE OF SIZE 12
-            obs_12 = np.zeros((self.NUM_DRONES,12))
-            for i in range(self.NUM_DRONES):
-                #obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
-                obs = self._getDroneStateVector(i)
-                obs_12[i, :] = np.hstack([obs[0:3], obs[7:10], obs[10:13], obs[13:16]]).reshape(12,)
-            ret = np.array([obs_12[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
-            #### Add action buffer to observation #######################
-            for i in range(self.ACTION_BUFFER_SIZE):
-                ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
-            return ret
+            # #### OBS SPACE OF SIZE 12
+            # obs_12 = np.zeros((self.NUM_DRONES,12))
+            # for i in range(self.NUM_DRONES):
+            #     #obs = self._clipAndNormalizeState(self._getDroneStateVector(i))
+            #     obs = self._getDroneStateVector(i)
+            #     obs_12[i, :] = np.hstack([obs[0:3], obs[7:10], obs[10:13], obs[13:16]]).reshape(12,)
+            # ret = np.array([obs_12[i, :] for i in range(self.NUM_DRONES)]).astype('float32')
+            # #### Add action buffer to observation #######################
+            # for i in range(self.ACTION_BUFFER_SIZE):
+            #     ret = np.hstack([ret, np.array([self.action_buffer[i][j, :] for j in range(self.NUM_DRONES)])])
+            # return ret
             ############################################################
         elif self.OBS_TYPE == ObservationType.KIN_DEPTH:
             if self.step_counter%self.IMG_CAPTURE_FREQ == 0:
@@ -171,7 +175,7 @@ class ExpertAviary(BaseAviary):
                         raw_depth = self.dep[i]
                         normalized_depth = (raw_depth-np.min(raw_depth)) / (np.max(raw_depth)-np.min(raw_depth))
                         converted_depth = self.convertDepthToRealSense(normalized_depth)
-                        self._exportImage(img_type=ImageType.DEP, img_input=raw_depth, path=self.ONBOARD_IMG_PATH+"/drone_"+str(i), frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ))
+                        #self._exportImage(img_type=ImageType.DEP, img_input=raw_depth, path=self.ONBOARD_IMG_PATH+"/drone_"+str(i), frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ))
                         self._exportImage(img_type=ImageType.RGB_ONLY,
                                           img_input=converted_depth,
                                           path=self.ONBOARD_IMG_PATH+"/drone_"+str(i),
