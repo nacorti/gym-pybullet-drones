@@ -163,7 +163,17 @@ def run(
     print(f"full_reference_traj: {full_reference_traj[53]}")
     
 
-    #mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
+    mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
+    
+    for point in mh_traj:
+        for cand_rollout in point:
+            rfactor = random.random()
+            gfactor = random.random()
+            bfactor = random.random()
+            for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
+                p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
+    
+    
 
     #print(f"mh_traj: {len(mh_traj)}")
 
@@ -195,7 +205,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
             phi_step = 0.2
             bspline_anchors = 3
             traj_len = 10
-            max_steps_metropolis = 20#5#0000
+            max_steps_metropolis = 100#5#0000
             traj_dt = 0.1 # 1/240 #env.CTRL_FREQ
             rollouts = []
             x, y, z = position
@@ -232,7 +242,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 rfactor = random.random()
                 gfactor = random.random()
                 bfactor = random.random()
-                DRAW_ANCHOR_POINTS = True
+                DRAW_ANCHOR_POINTS = False
                 if DRAW_ANCHOR_POINTS:
                     print(f"x_vec: {x_vec}, y_vec: {y_vec}, z_vec: {z_vec}")
                     for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(zip(x_vec, y_vec, z_vec))):
@@ -282,12 +292,8 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 # self.computeCost(self.state_array_h_, self.reference_states_h_, self.input_array_h_, self.reference_inputs_h_, self.cost_array_h_, self.accumulated_cost_array_h_)
                 # kd_tree.query_kdtree(self.state_array_h_, self.accumulated_cost_array_h_, self.traj_len_, query_every_nth_point, True)
                 
-                cost = computeCost(cand_rollout.getPositions(), reference_traj[i:i+10])
+                cost = computeCost(cand_rollout.getPositions(), reference_traj[rowNum:rowNum+10])
                 cand_rollout.setCost(float(cost))
-                DRAW_FULL_TRAJECTORY = True
-                if DRAW_FULL_TRAJECTORY:
-                    for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
-                        p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
 
                 curr_cost = cand_rollout.getCost()
                 alpha = min(1.0, (math.exp(-0.01 * curr_cost) + 1.0e-7) / (math.exp(-0.01 * prev_cost) + 1.0e-7))
@@ -304,10 +310,9 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
 
                 rollouts.append(cand_rollout)
 
-                print("rollouts.size() = %d\n" % len(rollouts))
-
-                # rollouts.sort(key=attrgetter('cost'))
-            master_rollouts.append(rollouts)
+            print("rollouts.size() = %d\n" % len(rollouts))
+            rollouts.sort(key=lambda x: x.getCost())
+            master_rollouts.append(rollouts[:3])
     return master_rollouts
 
 def check_collision(trajectory: TrajectoryExt, obstacle_list: list[int], l: float = 0.02, w: float = 0.02, h: float = 0.01)->bool:
