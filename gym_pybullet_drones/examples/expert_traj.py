@@ -11,8 +11,10 @@ Notes
 The drones move along 2D trajectories in the X-Z plane, between x == +.5 and -.5.
 
 """
+import os
 import time
 import argparse
+import datetime
 import numpy as np
 import pybullet as p
 import math
@@ -164,12 +166,18 @@ def run(
     
 
     mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
-    
+    OUTPUT_FOLDER='results'
+    csv_dir = os.path.join(OUTPUT_FOLDER, "save-flight-traj-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
+    if not os.path.exists(csv_dir):
+        os.makedirs(csv_dir+'/')
     for point in mh_traj:
         for cand_rollout in point:
             rfactor = random.random()
             gfactor = random.random()
             bfactor = random.random()
+            for (i, position) in enumerate(cand_rollout.getPositions()):
+                with open(csv_dir+"/traj-"+str(i)+".csv", 'wb') as out_file:
+                    np.savetxt(out_file, np.transpose(np.vstack([i, position])), delimiter=",")
             for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
                 p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
     
