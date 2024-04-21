@@ -170,14 +170,14 @@ def run(
     csv_dir = os.path.join(OUTPUT_FOLDER, "save-flight-traj-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S"))
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir+'/')
-    for point in mh_traj:
-        for cand_rollout in point:
+    for sample_point in mh_traj:
+        for cand_rollout in sample_point: #each point has 3 rollouts
             rfactor = random.random()
             gfactor = random.random()
             bfactor = random.random()
-            for (i, position) in enumerate(cand_rollout.getPositions()):
+            for (i, point) in enumerate(cand_rollout.points):
                 with open(csv_dir+"/traj-"+str(i)+".csv", 'a') as out_file:
-                    np.savetxt(out_file, np.transpose(np.vstack([i, *position])), delimiter=",", newline='\n')
+                    np.savetxt(out_file, np.transpose(np.vstack([i, *point.position, *point.attitude, *point.velocity, *point.acceleration])), delimiter=",", newline='\n')
             for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
                 p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
     
@@ -293,7 +293,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 # cand_rollout.replaceFirstPoint(state_est_plus)
                 # cand_rollout.fitPolynomialCoeffs(8, 1)
                 # cand_rollout.resamplePointsFromPolyCoeffs()
-                # cand_rollout.recomputeTrajectory()
+                cand_rollout.recomputeTrajectory()
                 # cand_rollout.replaceFirstPoint(state_est_plus)
                 # self.getRolloutData(cand_rollout)
 
