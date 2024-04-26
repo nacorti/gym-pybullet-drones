@@ -66,25 +66,25 @@ class TrajectoryExt:
 
         self.points[0].acceleration = self.points[1].acceleration
         
-        print(f"accelerations: {[point.acceleration for point in self.points]}")
+        #print(f"accelerations: {[point.acceleration for point in self.points]}")
 
         for i in range(1, len(self.points)):
             # Attitude
             thrust = self.points[i].acceleration + (9.81 * np.array([0.0, 0.0, 1.0]))
-            print(f"thrust: {thrust}")
+            #print(f"thrust: {thrust}")
             I_eZ_I = np.array([0.0, 0.0, 1.0])
             # Check if the vectors are collinear
             crossprod = np.cross(I_eZ_I, thrust)
-            print(f"crossprod: {crossprod}")
+            #print(f"crossprod: {crossprod}")
             if np.allclose(crossprod, 0):
-                print('collinear')
+                #print('collinear')
                 # The vectors are collinear, so we can't create a quaternion from them
                 # Define a default quaternion representing no rotation
                 q_pitch_roll = R.from_quat([1, 0, 0, 0])
             else:
                 q_pitch_roll = R.from_rotvec(np.cross(I_eZ_I, thrust))
 
-            print(f"q_pitch_roll: {q_pitch_roll}")
+            #print(f"q_pitch_roll: {q_pitch_roll}")
             #linvel_body = q_pitch_roll.inv().apply(self.points[i].velocity) # generates ValueError: Found zero norm quaternions in `quat`.
             heading = 0.0
             if self.yawing_enabled:
