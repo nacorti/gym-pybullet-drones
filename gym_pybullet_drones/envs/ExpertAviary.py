@@ -323,7 +323,7 @@ class ExpertAviary(BaseAviary):
         #            p.getQuaternionFromEuler([0,0,0]),
         #            physicsClientId=self.CLIENT
         # )
-        self.distribute_cylinders(10, .5, -3, 5, 3)
+        self.distribute_cylinders(15, .5, -2, 5, 2)
                     
 
     def distribute_cylinders(self, N, x1, y1, x2, y2):

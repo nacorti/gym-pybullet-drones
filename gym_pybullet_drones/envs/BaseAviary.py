@@ -140,7 +140,7 @@ class BaseAviary(gym.Env):
             self.IMG_RES = np.array([640, 480]) #np.array([64,48]) 
             self.IMG_FRAME_PER_SEC = 24
             self.IMG_CAPTURE_FREQ = int(self.PYB_FREQ/self.IMG_FRAME_PER_SEC)
-            self.rgb = np.zeros(((self.NUM_DRONES, self.IMG_RES[1], self.IMG_RES[0], 4)))
+            self.rgb = np.zeros(((self.NUM_DRONES, self.IMG_RES[1], self.IMG_RES[0], 4))) #10*int(self.PYB_FREQ/self.IMG_FRAME_PER_SEC)
             self.dep = np.ones(((self.NUM_DRONES, self.IMG_RES[1], self.IMG_RES[0])))
             self.seg = np.zeros(((self.NUM_DRONES, self.IMG_RES[1], self.IMG_RES[0])))
             if self.IMG_CAPTURE_FREQ%self.PYB_STEPS_PER_CTRL != 0:

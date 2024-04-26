@@ -140,8 +140,8 @@ def run(
     vels = logger.get_velocities()
     accs = logger.get_avg_accels()
     
-    print(f"vels: {vels.shape}")
-    print(f"accs: {accs.shape}") 
+    #print(f"vels: {vels.shape}")
+    #print(f"accs: {accs.shape}") 
     # shapes are
     # vels: (2, 3, 960)
     # accs: (2, 3, 960)
@@ -149,20 +149,20 @@ def run(
     pos_for_first_drone = solved_path[:, :3]
     quat_for_first_drone = solved_path[:, 3:]
     
-    print(f"pos_for_first_drone: {pos_for_first_drone.shape}")
-    print(f"quat_for_first_drone: {quat_for_first_drone.shape}")
+    #print(f"pos_for_first_drone: {pos_for_first_drone.shape}")
+    #print(f"quat_for_first_drone: {quat_for_first_drone.shape}")
     
     vels_for_first_drone = vels[0, :, :500].T
     accs_for_first_drone = accs[0, :, :500].T
     
-    print(f"vels_for_first_drone: {vels_for_first_drone.shape}")
-    print(f"accs_for_first_drone: {accs_for_first_drone.shape}")
+    #print(f"vels_for_first_drone: {vels_for_first_drone.shape}")
+    #print(f"accs_for_first_drone: {accs_for_first_drone.shape}")
     
     full_reference_traj = np.hstack([pos_for_first_drone, vels_for_first_drone, accs_for_first_drone, quat_for_first_drone])
     
-    print(f"full_reference_traj: {full_reference_traj.shape}")
+    #print(f"full_reference_traj: {full_reference_traj.shape}")
     
-    print(f"full_reference_traj: {full_reference_traj[53]}")
+    #print(f"full_reference_traj: {full_reference_traj[53]}")
     
 
     mh_traj = calculate_MH_trajectories(full_reference_traj, env.get_obstacle_list())
@@ -228,18 +228,20 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 # so only the middle anchor will not necessarily be on the trajectory
                 for anchor_idx in range(1, bspline_anchors+1):
                     access_index = rowNum + (16*anchor_idx)
-                    print(f"access_index: {access_index}")
+                    if access_index >= len(reference_traj):
+                        break
+                    #print(f"access_index: {access_index}")
                     ref_pos_at_curr_time, ref_vel_at_curr_time = reference_traj[access_index][:3], reference_traj[access_index][3:6]
-                    print(f"ref_pos_at_curr_time: {ref_pos_at_curr_time}")
+                    #print(f"ref_pos_at_curr_time: {ref_pos_at_curr_time}")
                     if len(x_vec_prev) == 0:
-                        print("no x_vec_prev")
+                        #print("no x_vec_prev")
                         x_anchor, y_anchor, z_anchor = sampleAnchorPoint(ref_pos_at_curr_time, ref_vel_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
                         y_vec.append(y_anchor)
                         z_vec.append(z_anchor)
                     else:
-                        print("x_vec_prev")
+                        #print("x_vec_prev")
                         x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[anchor_idx], y_vec_prev[anchor_idx], z_vec_prev[anchor_idx]]), ref_vel_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
