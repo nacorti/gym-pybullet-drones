@@ -108,8 +108,10 @@ def run(
             action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                 state=obs[0],
                                                                 target_pos=TARGET_POS[i],
-                                                                #target_rpy=target_rpy
+                                                                target_rpy=target_rpy
                                                                 )
+            if i % 50 == 0:
+                env.takeSnapshot()
         else:
             # set target_pos to last waypoint
             action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,

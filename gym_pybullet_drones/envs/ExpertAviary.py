@@ -186,6 +186,14 @@ class ExpertAviary(BaseAviary):
         else:
             print("[ERROR] in ExpertAviary._computeObs()")
 
+    def takeSnapshot(self):
+        _, depth, _ = self._getDroneImages(0, segmentation=False)
+        raw_depth = depth
+        normalized_depth = (raw_depth-np.min(raw_depth)) / (np.max(raw_depth)-np.min(raw_depth))
+        converted_depth = self.convertDepthToRealSense(normalized_depth)
+        #self._exportImage(img_type=ImageType.DEP, img_input=raw_depth, path=self.ONBOARD_IMG_PATH+"/drone_"+str(i), frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ))
+        self._exportImage(img_type=ImageType.RGB_ONLY, img_input=converted_depth, path=self.ONBOARD_IMG_PATH+"/drone_"+str(0), frame_num=int(self.step_counter/self.IMG_CAPTURE_FREQ))
+
     # Intel Realsense cameras represent depth as an RGB value where the three channels represent the depth in meters
     # Blue is close, green is further, and red is the furthest. When a point in the depth image is beyond the max
     # range of the camera, the pixel will be black (0,0,0).
