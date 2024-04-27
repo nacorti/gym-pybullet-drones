@@ -103,8 +103,13 @@ def run(
         #### Step the simulation ###################################
         obs, reward, terminated, truncated, info = env.step(action)
         #### Compute control for the current way point #############
-        if i < solved_path.shape[0]:
+        if i < (solved_path.shape[0] -1):
+            direction = TARGET_POS[i+1] - TARGET_POS[i]
+            yaw = np.arctan2(direction[1], direction[0])
+            
             target_rpy = Rotation.from_quat(TARGET_QUAT[i]).as_euler('xyz')
+            target_rpy[2] = yaw
+            print(f"target_rpy: {target_rpy}")
             action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                 state=obs[0],
                                                                 target_pos=TARGET_POS[i],
@@ -112,6 +117,7 @@ def run(
                                                                 )
             if i % 50 == 0:
                 env.takeSnapshot()
+                env.saveOdometry()
         else:
             # set target_pos to last waypoint
             action[0, :], _, _ = ctrl[0].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
@@ -480,7 +486,7 @@ def get_reference_trajectory(obstacle_list: list[int]):
 
     # this will automatically choose a default planner with
     # default parameters
-    solved = ss.solve(10.0)
+    solved = ss.solve(20.0)
 
     # After the path is solved
     if solved:
