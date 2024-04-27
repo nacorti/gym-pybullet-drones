@@ -323,7 +323,8 @@ class ExpertAviary(BaseAviary):
         #            p.getQuaternionFromEuler([0,0,0]),
         #            physicsClientId=self.CLIENT
         # )
-        self.distribute_cylinders(15, .5, -2, 5, 2)
+        #self.distribute_cylinders(15, .5, -2, 5, 2)
+        self.distribute_deterministic_cylinders()
                     
 
     def distribute_cylinders(self, N, x1, y1, x2, y2):
@@ -356,3 +357,18 @@ class ExpertAviary(BaseAviary):
                                         physicsClientId=self.CLIENT)
                 self.obstacle_list.append(cylinder_id)
                 cylinders.append(cylinder_id)
+                
+    def distribute_deterministic_cylinders(self):
+        cylinder_xy_coords = [
+            (2, 0),
+            (1, 1),
+            (1, -0.5),
+            (2.5, -1)
+        ]
+        for x, y in cylinder_xy_coords:
+            z = 1.5
+            cylinder_id = p.loadURDF("../assets/cylinder.urdf",
+                                        [x, y, z],
+                                        p.getQuaternionFromEuler([0, 0, 0]),
+                                        physicsClientId=self.CLIENT)
+            self.obstacle_list.append(cylinder_id)

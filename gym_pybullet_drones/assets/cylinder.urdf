@@ -3,17 +3,17 @@
     <link name="base_link">
         <visual>
             <geometry>
-                <cylinder length="5" radius="0.25" />
+                <cylinder length="3" radius="0.25" />
             </geometry>
         </visual>
         <collision>
             <geometry>
-                <cylinder length="5" radius="0.25" />
+                <cylinder length="3" radius="0.25" />
             </geometry>
         </collision>
         <inertial>
             <mass value="100" />
-            <origin xyz="0 0 2.5" />
+            <origin xyz="0 0 1.5" />
             <inertia ixx="0.0833333" ixy="0" ixz="0" iyy="0.0833333" iyz="0" izz="0.166667" />  
         </inertial>
     </link>
