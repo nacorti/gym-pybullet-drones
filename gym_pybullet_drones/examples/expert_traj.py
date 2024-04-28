@@ -225,7 +225,8 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
             traj_dt = 0.1 # 1/240 #env.CTRL_FREQ
             rollouts = []
             x, y, z = position
-            for step in range(max_steps_metropolis):
+            while len(rollouts) < max_steps_metropolis:
+                step = len(rollouts)
                 t_vec, x_vec, y_vec, z_vec = [0], [x], [y], [z]
                 x_vec_prev, y_vec_prev, z_vec_prev = [], [], []
                 print(f"on step {step} of row {rowNum}")
@@ -330,7 +331,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
 
             print("rollouts.size() = %d\n" % len(rollouts))
             rollouts.sort(key=lambda x: x.getCost())
-            master_rollouts.append(rollouts[:3])
+            master_rollouts.append(rollouts)#[:3])
     return master_rollouts
 
 def check_collision(trajectory: TrajectoryExt, obstacle_list: list[int], l: float = 0.02, w: float = 0.02, h: float = 0.01)->bool:
