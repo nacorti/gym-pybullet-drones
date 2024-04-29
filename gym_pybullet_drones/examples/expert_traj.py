@@ -179,7 +179,7 @@ def run(
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir+'/')
     for sample_point in mh_traj:
-        for cand_rollout in sample_point: #each point has 3 rollouts
+        for cand_rollout in sample_point[:3]: #take the top 3 rollouts
             rfactor = random.random()
             gfactor = random.random()
             bfactor = random.random()
@@ -225,7 +225,9 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
             traj_dt = 0.1 # 1/240 #env.CTRL_FREQ
             rollouts = []
             x, y, z = position
+            mh_tries = 0
             while len(rollouts) < max_steps_metropolis:
+                mh_tries += 1
                 step = len(rollouts)
                 t_vec, x_vec, y_vec, z_vec = [0], [x], [y], [z]
                 x_vec_prev, y_vec_prev, z_vec_prev = [], [], []
@@ -271,7 +273,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 cand_rollout = createBSpline(t_vec, x_vec, y_vec, z_vec)
 
                 # widen search space progressively
-                if step > 0 and (step - 1) % (max_steps_metropolis / 3) == 0:
+                if mh_tries % 10 == 0 and mh_tries - step >= 20:
                     # rollouts.sort(key=attrgetter('cost'))
                     # if len(rollouts) >= save_n_best and rollouts[save_n_best - 1].getCost() < 100.0:
                     #     if directory != "" and self.verbose_:

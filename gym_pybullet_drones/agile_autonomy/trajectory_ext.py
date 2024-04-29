@@ -19,6 +19,7 @@ class TrajectoryExt:
         self.points = []
         self.cost = float('inf')
         self.yawing_enabled = True
+        self.frame_id = 'World'
             
     def addPoint(self, point: TrajectoryExtPoint):
         self.points.append(point)
@@ -120,3 +121,89 @@ class TrajectoryExt:
         self.points[0].attitude = self.points[1].attitude
         self.points[0].bodyrates = self.points[1].bodyrates
         self.points[0].collective_thrust = self.points[1].collective_thrust
+
+    def convertToBodyFrame(self):
+        if self.frame_id == 'Body':
+            return
+
+        T_W_S = None
+        if self.frame_id == 'World':
+            T_W_S = R.from_quat(self.reference_odometry.attitude)
+
+        for point in self.points:
+            T_W_C = R.from_quat(point.attitude)
+            T_S_C = T_W_S.inv() * T_W_C
+
+            linvel_bf = T_W_S.inv().apply(point.velocity)
+            linacc_bf = T_W_S.inv().apply(point.acceleration)
+            linjerk_bf = T_W_S.inv().apply(point.jerk)
+            linsnap_bf = T_W_S.inv().apply(point.snap)
+
+            point.position = T_S_C.apply(point.position)
+            point.attitude = T_S_C.as_quat()
+            point.velocity = linvel_bf
+            point.acceleration = linacc_bf
+            point.jerk = linjerk_bf
+            point.snap = linsnap_bf
+
+        self.frame_id = 'Body'
+
+    def convertToWorldFrame(self):
+        if self.frame_id == 'World':
+            return
+
+        T_W_S = None
+        if self.frame_id == 'Body':
+            T_W_S = R.from_quat(self.reference_odometry.attitude)
+
+        for point in self.points:
+            T_S_C = R.from_quat([0, 0, 0, 1])  # Identity quaternion
+            T_W_C = T_W_S * T_S_C
+
+            linvel_wf = T_W_S.apply(point.velocity)
+            linacc_wf = T_W_S.apply(point.acceleration)
+            linjerk_wf = T_W_S.apply(point.jerk)
+            linsnap_wf = T_W_S.apply(point.snap)
+
+            # compute attitude
+            thrust = linacc_wf + 9.81 * np.array([0, 0, 1])
+            I_eZ_I = np.array([0.0, 0.0, 1.0])
+            q_pitch_roll = R.from_rotvec(np.cross(I_eZ_I, thrust))
+
+            heading = 0.0
+            if self.yawing_enabled:
+                heading = np.arctan2(linvel_wf[1], linvel_wf[0])
+
+            q_heading = R.from_rotvec(heading * np.array([0, 0, 1]))
+            q_att = q_pitch_roll * q_heading
+            point.attitude = q_att.as_quat()
+
+            # Inputs
+            point.collective_thrust = np.linalg.norm(thrust)
+            time_step = 0.1
+            thrust_1 = thrust - time_step / 2.0 * linjerk_wf
+            thrust_2 = thrust + time_step / 2.0 * linjerk_wf
+            thrust_1 = thrust_1 / np.linalg.norm(thrust_1)
+            thrust_2 = thrust_2 / np.linalg.norm(thrust_2)
+            crossProd = np.cross(thrust_1, thrust_2)
+            angular_rates_wf = np.zeros(3)
+            if np.linalg.norm(crossProd) > 0.0:
+                angular_rates_wf = np.arccos(np.clip(np.dot(thrust_1, thrust_2), -1.0, 1.0)) / time_step * crossProd / (np.linalg.norm(crossProd) + 1.0e-5)
+            point.bodyrates = q_att.inv().apply(angular_rates_wf)
+
+            point.position = T_W_C.apply(point.position)
+            point.velocity = linvel_wf
+            point.acceleration = linacc_wf
+            point.jerk = linjerk_wf
+            point.snap = linsnap_wf
+
+        self.frame_id = 'World'        
+    # def convertToBodyFrame(self, body_frame):
+    #     for i in range(len(self.points)):
+    #         self.points[i].position = body_frame.inv().apply(self.points[i].position)
+    #         self.points[i].velocity = body_frame.inv().apply(self.points[i].velocity)
+    #         self.points[i].acceleration = body_frame.inv().apply(self.points[i].acceleration)
+    #         self.points[i].jerk = body_frame.inv().apply(self.points[i].jerk)
+    #         self.points[i].snap = body_frame.inv().apply(self.points[i].snap)
+    #         self.points[i].attitude = body_frame.inv().apply(self.points[i].attitude)
+    #         self.points[i].bodyrates = body_frame.inv().apply(self.points[i].bodyrates)
