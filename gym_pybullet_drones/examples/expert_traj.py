@@ -179,7 +179,7 @@ def run(
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir+'/')
     for sample_point in mh_traj:
-        for cand_rollout in sample_point[:20]: #take the top 3 rollouts
+        for cand_rollout in sample_point[:3]: #take the top 3 rollouts
             rfactor = random.random()
             gfactor = random.random()
             bfactor = random.random()
@@ -190,6 +190,8 @@ def run(
             for (i, point) in enumerate(body_frame_points):
                 with open(csv_dir+"/traj-"+str(i)+"-body.csv", 'a') as out_file:
                     np.savetxt(out_file, np.transpose(np.vstack([i, *point.position, *point.attitude, *point.velocity, *point.acceleration])), delimiter=",", newline='\n')
+        for cand_rollout in sample_point[:50]:
+            print(f"cost: {cand_rollout.getCost()}")
             for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
                 p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
     
@@ -219,9 +221,9 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
             cost = float('inf')
             prev_cost = float('inf')
             accept_dist = random.uniform(0, 1)
-            rand_theta = 0.0
+            rand_theta = 0.05
             theta_step = 0.15
-            rand_phi = 0.0
+            rand_phi = 0.05
             phi_step = 0.2
             bspline_anchors = 3
             traj_len = 10
@@ -249,14 +251,14 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                     ref_pos_at_curr_time, ref_vel_at_curr_time = reference_traj[access_index][:3], reference_traj[access_index][3:6]
                     #print(f"ref_pos_at_curr_time: {ref_pos_at_curr_time}")
                     if len(x_vec_prev) == 0:
-                        #print("no x_vec_prev")
+                        print("no x_vec_prev")
                         x_anchor, y_anchor, z_anchor = sampleAnchorPoint(ref_pos_at_curr_time, ref_vel_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
                         y_vec.append(y_anchor)
                         z_vec.append(z_anchor)
                     else:
-                        #print("x_vec_prev")
+                        print("x_vec_prev")
                         x_anchor, y_anchor, z_anchor = sampleAnchorPoint(np.array([x_vec_prev[anchor_idx], y_vec_prev[anchor_idx], z_vec_prev[anchor_idx]]), ref_vel_at_curr_time, rand_theta, rand_phi)
                         t_vec.append(anchor_idx * anchor_dt)
                         x_vec.append(x_anchor)
@@ -267,7 +269,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 rfactor = random.random()
                 gfactor = random.random()
                 bfactor = random.random()
-                DRAW_ANCHOR_POINTS = False
+                DRAW_ANCHOR_POINTS = True
                 if DRAW_ANCHOR_POINTS:
                     print(f"x_vec: {x_vec}, y_vec: {y_vec}, z_vec: {z_vec}")
                     for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(zip(x_vec, y_vec, z_vec))):
@@ -285,6 +287,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                     #     break
                     rand_theta += theta_step
                     rand_phi += phi_step
+                    mh_tries = step
                 
                 # cand_rollout.enableYawing(True)
                 # cand_rollout.convertToFrame(FrameID.World, state_estimate_point.position, state_estimate_point.orientation)
