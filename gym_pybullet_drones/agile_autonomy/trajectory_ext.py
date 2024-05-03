@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from copy import deepcopy
 
 class TrajectoryExtPoint:
     def __init__(self):
@@ -15,11 +16,16 @@ class TrajectoryExtPoint:
         
 
 class TrajectoryExt:
-    def __init__(self):
+    def __init__(self, position: np.ndarray, velocity: np.ndarray, acceleration: np.ndarray, attitude: np.ndarray): 
         self.points = []
         self.cost = float('inf')
         self.yawing_enabled = True
         self.frame_id = 'World'
+        self.position = position
+        self.velocity = velocity
+        self.acceleration = acceleration
+        self.attitude = attitude
+        
             
     def addPoint(self, point: TrajectoryExtPoint):
         self.points.append(point)
@@ -128,7 +134,7 @@ class TrajectoryExt:
 
         T_W_S = None
         if self.frame_id == 'World':
-            T_W_S = R.from_quat(self.reference_odometry.attitude)
+            T_W_S = R.from_quat(self.attitude)
 
         for point in self.points:
             T_W_C = R.from_quat(point.attitude)
@@ -148,13 +154,40 @@ class TrajectoryExt:
 
         self.frame_id = 'Body'
 
+    def getBodyFramePoints(self):
+        if self.frame_id == 'Body':
+            return deepcopy(self.points)
+
+        T_W_S = None
+        if self.frame_id == 'World':
+            T_W_S = R.from_quat(self.attitude)
+
+        body_frame_points = deepcopy(self.points)
+        for point in body_frame_points:
+            T_W_C = R.from_quat(point.attitude)
+            T_S_C = T_W_S.inv() * T_W_C
+
+            linvel_bf = T_W_S.inv().apply(point.velocity)
+            linacc_bf = T_W_S.inv().apply(point.acceleration)
+            linjerk_bf = T_W_S.inv().apply(point.jerk)
+            linsnap_bf = T_W_S.inv().apply(point.snap)
+
+            point.position = T_S_C.apply(point.position)
+            point.attitude = T_S_C.as_quat()
+            point.velocity = linvel_bf
+            point.acceleration = linacc_bf
+            point.jerk = linjerk_bf
+            point.snap = linsnap_bf
+
+        return body_frame_points        
+
     def convertToWorldFrame(self):
         if self.frame_id == 'World':
             return
 
         T_W_S = None
         if self.frame_id == 'Body':
-            T_W_S = R.from_quat(self.reference_odometry.attitude)
+            T_W_S = R.from_quat(self.attitude)
 
         for point in self.points:
             T_S_C = R.from_quat([0, 0, 0, 1])  # Identity quaternion

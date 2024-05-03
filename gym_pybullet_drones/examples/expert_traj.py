@@ -179,12 +179,16 @@ def run(
     if not os.path.exists(csv_dir):
         os.makedirs(csv_dir+'/')
     for sample_point in mh_traj:
-        for cand_rollout in sample_point[:3]: #take the top 3 rollouts
+        for cand_rollout in sample_point[:20]: #take the top 3 rollouts
             rfactor = random.random()
             gfactor = random.random()
             bfactor = random.random()
             for (i, point) in enumerate(cand_rollout.points):
-                with open(csv_dir+"/traj-"+str(i)+".csv", 'a') as out_file:
+                with open(csv_dir+"/traj-"+str(i)+"-world.csv", 'a') as out_file:
+                    np.savetxt(out_file, np.transpose(np.vstack([i, *point.position, *point.attitude, *point.velocity, *point.acceleration])), delimiter=",", newline='\n')
+            body_frame_points = cand_rollout.getBodyFramePoints()
+            for (i, point) in enumerate(body_frame_points):
+                with open(csv_dir+"/traj-"+str(i)+"-body.csv", 'a') as out_file:
                     np.savetxt(out_file, np.transpose(np.vstack([i, *point.position, *point.attitude, *point.velocity, *point.acceleration])), delimiter=",", newline='\n')
             for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(cand_rollout.getPositions())):
                 p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)
@@ -270,7 +274,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                         p.addUserDebugLine(lineFromXYZ=[x0, y0, z0], lineToXYZ=[x1, y1, z1], lineColorRGB=[rfactor, gfactor, bfactor], lineWidth=5.0)   
                     
                 # build the spline from vecs 
-                cand_rollout = createBSpline(t_vec, x_vec, y_vec, z_vec)
+                cand_rollout = createBSpline(t_vec, x_vec, y_vec, z_vec, position, velocity, acceleration, orientation)
 
                 # widen search space progressively
                 if mh_tries % 10 == 0 and mh_tries - step >= 20:
@@ -350,11 +354,11 @@ def check_collision(trajectory: TrajectoryExt, obstacle_list: list[int], l: floa
                 return True
     return False
 
-def createBSpline(t_vec, x_vec, y_vec, z_vec, traj_len=10, traj_dt=0.1)->TrajectoryExt:
+def createBSpline(t_vec, x_vec, y_vec, z_vec, position, velocity, acceleration, attitude, traj_len=10, traj_dt=0.1)->TrajectoryExt:
     if len(t_vec) != len(x_vec) or len(t_vec) != len(y_vec) or len(t_vec) != len(z_vec):
         return False
 
-    bspline_traj = TrajectoryExt()
+    bspline_traj = TrajectoryExt(position=position, velocity=velocity, acceleration=acceleration, attitude=attitude)
     x_spline = Spline()
     x_spline.set_points(t_vec, x_vec)
     y_spline = Spline()
