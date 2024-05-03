@@ -198,7 +198,7 @@ class ExpertAviary(BaseAviary):
         pos_quat_vel = np.hstack([self.pos[0, :], self.quat[0, :], self.vel[0, :]])
         pos_quat_vel.reshape(10,)
         state_vec = np.array([self._getDroneStateVector(i) for i in range(self.NUM_DRONES)])
-        # np.save(f"{self.ONBOARD_IMG_PATH}/odometry.npy", state_vec)
+        np.save(f"{self.ONBOARD_IMG_PATH}/odometry.npy", state_vec)
 
     # Intel Realsense cameras represent depth as an RGB value where the three channels represent the depth in meters
     # Blue is close, green is further, and red is the furthest. When a point in the depth image is beyond the max

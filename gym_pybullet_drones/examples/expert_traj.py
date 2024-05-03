@@ -287,7 +287,9 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                     #     break
                     rand_theta += theta_step
                     rand_phi += phi_step
+                    print(f"increasing rand_theta to {rand_theta} and rand_phi to {rand_phi}")
                     mh_tries = step
+                    continue
                 
                 # cand_rollout.enableYawing(True)
                 # cand_rollout.convertToFrame(FrameID.World, state_estimate_point.position, state_estimate_point.orientation)
