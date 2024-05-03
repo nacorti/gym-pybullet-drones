@@ -269,7 +269,7 @@ def calculate_MH_trajectories(reference_traj: np.ndarray, obstacle_list: list[in
                 rfactor = random.random()
                 gfactor = random.random()
                 bfactor = random.random()
-                DRAW_ANCHOR_POINTS = True
+                DRAW_ANCHOR_POINTS = False
                 if DRAW_ANCHOR_POINTS:
                     print(f"x_vec: {x_vec}, y_vec: {y_vec}, z_vec: {z_vec}")
                     for i, ((x0, y0, z0),(x1, y1, z1)) in enumerate(pairwise(zip(x_vec, y_vec, z_vec))):
